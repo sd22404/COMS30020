@@ -1,3 +1,0 @@
-/home/finn/OneDrive/COMS30020/Weekly Workbooks/01 Introduction and Orientation/extras/RedNoise/cmake-build-speedy/CMakeFiles/RedNoise.dir
-/home/finn/OneDrive/COMS30020/Weekly Workbooks/01 Introduction and Orientation/extras/RedNoise/cmake-build-speedy/CMakeFiles/edit_cache.dir
-/home/finn/OneDrive/COMS30020/Weekly Workbooks/01 Introduction and Orientation/extras/RedNoise/cmake-build-speedy/CMakeFiles/rebuild_cache.dir

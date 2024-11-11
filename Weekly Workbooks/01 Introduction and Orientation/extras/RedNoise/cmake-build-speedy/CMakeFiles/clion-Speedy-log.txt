@@ -1,4 +1,0 @@
-/home/finn/.local/share/JetBrains/Toolbox/apps/clion/bin/cmake/linux/x64/bin/cmake -DCMAKE_BUILD_TYPE=Speedy -DCMAKE_MAKE_PROGRAM=/home/finn/.local/share/JetBrains/Toolbox/apps/clion/bin/ninja/linux/x64/ninja -G Ninja -S "/home/finn/OneDrive/COMS30020/Weekly Workbooks/01 Introduction and Orientation/extras/RedNoise" -B "/home/finn/OneDrive/COMS30020/Weekly Workbooks/01 Introduction and Orientation/extras/RedNoise/cmake-build-speedy"
--- Configuring done (0.0s)
--- Generating done (0.0s)
--- Build files have been written to: /home/finn/OneDrive/COMS30020/Weekly Workbooks/01 Introduction and Orientation/extras/RedNoise/cmake-build-speedy
