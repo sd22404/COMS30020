@@ -11,8 +11,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtx/string_cast.hpp>
 
-#include <../../src/Camera.h>
-#include <../../src/Light.h>
+#include <../extra/Camera.h>
+#include <../extra/Light.h>
 
 #define WIDTH 1280
 #define HEIGHT 960
