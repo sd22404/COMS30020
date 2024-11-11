@@ -35,7 +35,11 @@ add_executable(RedNoise
         libs/sdw/TextureMap.cpp
         libs/sdw/TexturePoint.cpp
         libs/sdw/Utils.cpp
-        src/RedNoise.cpp)
+        src/RedNoise.cpp
+        src/Camera.cpp
+        src/Camera.h
+        src/Light.cpp
+        src/Light.h)
 
 if (MSVC)
     target_compile_options(RedNoise
@@ -60,8 +64,9 @@ else ()
         -Wno-unused-variable
         -Wno-ignored-attributes)
 
-    set(DEBUG_OPTIONS -O2 -fno-omit-frame-pointer -g)
+    set(DEBUG_OPTIONS -Og -fno-omit-frame-pointer -g)
     set(RELEASE_OPTIONS -O3 -march=native -mtune=native)
+    set(SPEEDY_OPTIONS -Ofast -funsafe-math-optimizations -march=native)
     target_link_libraries(RedNoise PUBLIC $<$<CONFIG:Debug>:-Wl,-lasan>)
 
 endif()
@@ -70,5 +75,6 @@ endif()
 target_compile_options(RedNoise PUBLIC "$<$<CONFIG:RelWithDebInfo>:${RELEASE_OPTIONS}>")
 target_compile_options(RedNoise PUBLIC "$<$<CONFIG:Release>:${RELEASE_OPTIONS}>")
 target_compile_options(RedNoise PUBLIC "$<$<CONFIG:Debug>:${DEBUG_OPTIONS}>")
+target_compile_options(RedNoise PUBLIC "$<$<CONFIG:Speedy>:${SPEEDY_OPTIONS}>")
  
 target_link_libraries(RedNoise PRIVATE ${SDL2_LIBRARIES})

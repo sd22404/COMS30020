@@ -31,6 +31,8 @@ SDL_COMPILER_FLAGS := $(shell sdl2-config --cflags)
 SDL_LINKER_FLAGS := $(shell sdl2-config --libs)
 SDW_LINKER_FLAGS := $(SDW_OBJECT_FILES)
 
+all: default
+
 default: debug
 
 # Rule to compile and link for use with a debugger (although works fine even if you aren't using a debugger !)

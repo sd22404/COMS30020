@@ -12,9 +12,9 @@ DrawingWindow::DrawingWindow(int w, int h, bool fullscreen) : width(w), height(h
 	window = SDL_CreateWindow("COMS30020", ANYWHERE, ANYWHERE, width, height, flags);
 	if (!window) printMessageAndQuit("Could not set video mode: ", SDL_GetError());
 	// Set rendering to software (hardware acceleration doesn't work on all platforms)
-	flags = SDL_RENDERER_SOFTWARE;
+	// flags = SDL_RENDERER_SOFTWARE;
 	// You could try hardware acceleration if you like - by uncommenting the below line
-	// flags = SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC;
+	flags = SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC;
 	renderer = SDL_CreateRenderer(window, -1, flags);
 	if (!renderer) printMessageAndQuit("Could not create renderer: ", SDL_GetError());
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
