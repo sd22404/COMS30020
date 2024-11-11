@@ -13,6 +13,9 @@ struct Camera {
     glm::mat3 rotation;
     float focalLength;
     float moveSpeed;
+    float altMoveSpeed;
+    float lookSpeed;
+    float altLookSpeed;
 
     Camera();
     Camera(float focalLength);

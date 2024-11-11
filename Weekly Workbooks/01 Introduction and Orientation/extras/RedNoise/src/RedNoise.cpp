@@ -16,8 +16,8 @@
 
 #define WIDTH 1280
 #define HEIGHT 960
-#define SPEED_MULTIPLIER 5.0f
-#define THETA (2.0f * M_PI / 180.0f * 0.5f) // 0.5 degrees per input
+
+#define DEG_RAD (2.0f * M_PI / 180.0f) // 0.5 degrees per input
 #define MIN_INTERSECT_DISTANCE 0.001f
 #define AMBIENT 0.4f
 #define RENDER_TYPES 4
@@ -25,7 +25,6 @@
 const std::string MTL = "cornell-box.mtl";
 const std::string OBJ = "cornell-box.obj";
 
-bool FAST = false;
 bool ORBIT = false;
 int RENDER = 0;
 
@@ -495,7 +494,7 @@ void raytrace(std::vector<ModelTriangle> &triangles, Light &lightSource, Camera 
 
 void draw(std::vector<ModelTriangle> &triangles, Light &lightSource, Camera &cam, DrawingWindow &window) {
 	if (ORBIT) {
-		cam.position = cam.position * rotateY(THETA * -(FAST ? SPEED_MULTIPLIER : 1.0f));
+		cam.position = cam.position * rotateY(DEG_RAD * cam.lookSpeed);
 		glm::vec3 target = {0, 0, 0};
 		lookAt(target, cam);
 		window.clearPixels();
@@ -527,58 +526,58 @@ void handleEvent(SDL_Event &event, Light &lightSource, Camera &cam, DrawingWindo
 	if (event.type == SDL_KEYDOWN) {
 		// move left
 		if (event.key.keysym.sym == SDLK_a) {
-			cam.position -= normalize(cam.rotation[0]) * cam.moveSpeed * (FAST ? SPEED_MULTIPLIER : 1.0f);
+			cam.position -= normalize(cam.rotation[0]) * cam.moveSpeed;
 			window.clearPixels();
 		}
 		// move right
 		else if (event.key.keysym.sym == SDLK_d) {
-			cam.position += normalize(cam.rotation[0]) * cam.moveSpeed * (FAST ? SPEED_MULTIPLIER : 1.0f);
+			cam.position += normalize(cam.rotation[0]) * cam.moveSpeed;
 			window.clearPixels();
 		}
 		// move forwards
 		else if (event.key.keysym.sym == SDLK_w) {
-			cam.position -= normalize(cam.rotation[2]) * cam.moveSpeed * (FAST ? SPEED_MULTIPLIER : 1.0f);
+			cam.position -= normalize(cam.rotation[2]) * cam.moveSpeed;
 			window.clearPixels();
 		}
 		// move backwards
 		else if (event.key.keysym.sym == SDLK_s) {
-			cam.position += normalize(cam.rotation[2]) * cam.moveSpeed * (FAST ? SPEED_MULTIPLIER : 1.0f);
+			cam.position += normalize(cam.rotation[2]) * cam.moveSpeed;
 			window.clearPixels();
 		}
 		// move up
 		else if (event.key.keysym.sym == SDLK_r) {
-			cam.position += normalize(cam.rotation[1]) * cam.moveSpeed * (FAST ? SPEED_MULTIPLIER : 1.0f);
+			cam.position += normalize(cam.rotation[1]) * cam.moveSpeed;
 			window.clearPixels();
 		}
 		// move down
 		else if (event.key.keysym.sym == SDLK_f) {
-			cam.position -= normalize(cam.rotation[1]) * cam.moveSpeed * (FAST ? SPEED_MULTIPLIER : 1.0f);
+			cam.position -= normalize(cam.rotation[1]) * cam.moveSpeed;
 			window.clearPixels();
 		}
 		// orbit right
 		else if (event.key.keysym.sym == SDLK_e) {
-			cam.position = cam.position * rotateY(THETA * -(FAST ? SPEED_MULTIPLIER : 1.0f));
+			cam.position = cam.position * rotateY(DEG_RAD * -cam.lookSpeed);
 			window.clearPixels();
 		}
 		// orbit left
 		else if (event.key.keysym.sym == SDLK_q) {
-			cam.position = cam.position * rotateY(THETA * (FAST ? SPEED_MULTIPLIER : 1.0f));
+			cam.position = cam.position * rotateY(DEG_RAD * cam.lookSpeed);
 			window.clearPixels();
 		}
 		else if (event.key.keysym.sym == SDLK_LEFT) {
-			cam.rotation = rotateY(THETA * (FAST ? SPEED_MULTIPLIER : 1.0f)) * cam.rotation;
+			cam.rotation = rotateY(DEG_RAD * cam.lookSpeed) * cam.rotation;
 			window.clearPixels();
 		}
 		else if (event.key.keysym.sym == SDLK_RIGHT) {
-			cam.rotation = rotateY(THETA * -(FAST ? SPEED_MULTIPLIER : 1.0f)) * cam.rotation;
+			cam.rotation = rotateY(DEG_RAD * -cam.lookSpeed) * cam.rotation;
 			window.clearPixels();
 		}
 		else if (event.key.keysym.sym == SDLK_UP) {
-			cam.rotation = rotateV(cam.rotation[0], THETA * -(FAST ? SPEED_MULTIPLIER : 1.0f)) * cam.rotation;
+			cam.rotation = rotateV(cam.rotation[0], DEG_RAD * -cam.lookSpeed) * cam.rotation;
 			window.clearPixels();
 		}
 		else if (event.key.keysym.sym == SDLK_DOWN) {
-			cam.rotation = rotateV(cam.rotation[0], THETA * (FAST ? SPEED_MULTIPLIER : 1.0f)) * cam.rotation;
+			cam.rotation = rotateV(cam.rotation[0], DEG_RAD * cam.lookSpeed) * cam.rotation;
 			window.clearPixels();
 		}
 		else if (event.key.keysym.sym == SDLK_SPACE) {
@@ -595,7 +594,13 @@ void handleEvent(SDL_Event &event, Light &lightSource, Camera &cam, DrawingWindo
 			window.clearPixels();
 		}
 		else if (event.key.keysym.sym == SDLK_LSHIFT) {
-			FAST = !FAST;
+			float oldSpeed = cam.moveSpeed;
+			cam.moveSpeed = cam.altMoveSpeed;
+			cam.altMoveSpeed = oldSpeed;
+
+			oldSpeed = cam.lookSpeed;
+			cam.lookSpeed = cam.altLookSpeed;
+			cam.altLookSpeed = oldSpeed;
 		}
 		else if (event.key.keysym.sym == SDLK_LCTRL) {
 			RENDER++;
