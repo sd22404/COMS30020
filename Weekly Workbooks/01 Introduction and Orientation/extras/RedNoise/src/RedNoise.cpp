@@ -22,8 +22,8 @@
 #define AMBIENT 0.4f
 #define RENDER_TYPES 4
 
-const std::string MTL = "cornell-box.mtl";
-const std::string OBJ = "cornell-box.obj";
+const std::string MTL = "../cornell-box.mtl";
+const std::string OBJ = "../cornell-box.obj";
 
 bool ORBIT = false;
 int RENDER = 0;
@@ -585,13 +585,31 @@ void handleEvent(SDL_Event &event, Light &lightSource, Camera &cam, DrawingWindo
 			cam.rotation = cam.defaultRotation;
 			window.clearPixels();
 		}
-		else if (event.key.keysym.sym == SDLK_o) {
+		else if (event.key.keysym.sym == SDLK_g) {
 			ORBIT = !ORBIT;
 		}
-		else if (event.key.keysym.sym == SDLK_l) {
+		else if (event.key.keysym.sym == SDLK_h) {
 			glm::vec3 target = {0, 0, 0};
 			lookAt(target, cam);
 			window.clearPixels();
+		}
+		else if (event.key.keysym.sym == SDLK_i) {
+				lightSource.position += glm::vec3(0, 0, -1) * cam.moveSpeed;
+		}
+		else if (event.key.keysym.sym == SDLK_k) {
+			lightSource.position += glm::vec3(0, 0, 1) * cam.moveSpeed;
+		}
+		else if (event.key.keysym.sym == SDLK_j) {
+			lightSource.position += glm::vec3(-1, 0, 0) * cam.moveSpeed;
+		}
+		else if (event.key.keysym.sym == SDLK_l) {
+			lightSource.position += glm::vec3(1, 0, 0) * cam.moveSpeed;
+		}
+		else if (event.key.keysym.sym == SDLK_o) {
+			lightSource.position += glm::vec3(0, -1, 0) * cam.moveSpeed;
+		}
+		else if (event.key.keysym.sym == SDLK_p) {
+			lightSource.position += glm::vec3(0, 1, 0) * cam.moveSpeed;
 		}
 		else if (event.key.keysym.sym == SDLK_LSHIFT) {
 			float oldSpeed = cam.moveSpeed;
