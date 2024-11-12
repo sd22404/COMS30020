@@ -21,9 +21,9 @@
 #define MIN_INTERSECT_DISTANCE 0.001f
 #define RENDER_TYPES 4
 
-const std::string MTL = "../cornell-box.mtl";
-const std::string OBJ = "../cornell-box.obj";
-const std::string SPH = "../sphere.obj";
+const std::string MTL = "cornell-box.mtl";
+const std::string OBJ = "cornell-box.obj";
+const std::string SPH = "sphere.obj";
 
 bool ORBIT = false;
 int RENDER = 0;
@@ -50,7 +50,7 @@ RayTriangleIntersection closestIntersection(std::vector<ModelTriangle> &triangle
 		float v = possibleSolution.z;
 		// if closer than previously found solution, and within the bounds of the triangle, set new closest intersection
 		if (t > MIN_INTERSECT_DISTANCE && 1 / t > inverseClosestDistance && u >= 0 && u <= 1.0 && v >= 0 && v <= 1.0 && (u + v) <= 1.0) {
-			closestIntersection = RayTriangleIntersection(startPoint + t * rayDirection, t, triangle, i);
+			closestIntersection = RayTriangleIntersection(startPoint + t * rayDirection, t, triangle, i, {u, v, 1.0f - u - v});
 			inverseClosestDistance = 1 / t;
 		}
 	}
@@ -77,7 +77,7 @@ bool inShadow(std::vector<ModelTriangle> &triangles, glm::vec3 &surface, glm::ve
 	RayTriangleIntersection obstacle = closestIntersection(triangles, surface, shadowRay);
 	// if obstacle doesn't exist or is further than lightSource - no shadow
 	if (obstacle.triangleIndex == size_t(-1)) return false;
-	if (distance(surface, lightPos) < distance(surface, obstacle.intersectionPoint)) return false;
+	if (distance(surface, lightPos) <= distance(surface, obstacle.intersectionPoint)) return false;
 	return true;
 }
 
@@ -130,10 +130,10 @@ glm::vec3 barycentric(glm::vec3 &point, ModelTriangle &triangle) {
 	return {u, v, w};
 }
 
-glm::vec3 interpolateNormal(glm::vec3 &point, ModelTriangle &triangle) {
-	std::array<glm::vec3, 3> vNorms = triangle.vertexNormals;
-	glm::vec3 bCoords = barycentric(point, triangle);
-	glm::vec3 normal = bCoords.x * vNorms[2] + bCoords.y * vNorms[1] + bCoords.z * vNorms[0];
+glm::vec3 interpolateNormal(RayTriangleIntersection &intersection) {
+	std::array<glm::vec3, 3> vNorms = intersection.intersectedTriangle.vertexNormals;
+	glm::vec3 bCoords = intersection.barycentricIntersection;
+	glm::vec3 normal = bCoords.x * vNorms[0] + bCoords.y * vNorms[1] + bCoords.z * vNorms[2];
 	return normal;
 }
 
@@ -498,7 +498,8 @@ void raytrace(std::vector<ModelTriangle> &triangles, Light &lightSource, Camera 
 			RayTriangleIntersection intersection = closestIntersection(triangles, cam.position, rayDirection);
 			if (intersection.triangleIndex != size_t(-1)) {
 				Colour colour = intersection.intersectedTriangle.colour;
-				glm::vec3 pointNormal = interpolateNormal(intersection.intersectionPoint, intersection.intersectedTriangle);
+				glm::vec3 pointNormal = interpolateNormal(intersection);
+				pointNormal = intersection.intersectedTriangle.normal;
 				float brightness = pointBrightness(intersection.intersectionPoint, pointNormal, lightSource, cam);
 				if (inShadow(triangles, intersection.intersectionPoint, lightSource.position)) brightness = 0;
 				brightness = glm::max(brightness, lightSource.ambient);
@@ -516,14 +517,21 @@ void raytrace(std::vector<ModelTriangle> &triangles, Light &lightSource, Camera 
 
 
 void draw(std::vector<ModelTriangle> &triangles, Light &lightSource, Camera &cam, DrawingWindow &window) {
+	// create triangle for light source
+	ModelTriangle lightTrig = {
+		{lightSource.position.x - 0.025f, lightSource.position.y - 0.025f, lightSource.position.z},
+		{lightSource.position.x + 0.025f, lightSource.position.y - 0.025f, lightSource.position.z},
+		{lightSource.position.x, lightSource.position.y + 0.025f, lightSource.position.z},
+		Colour(255, 255, 255)
+	};
+	std::vector<ModelTriangle> extras = {lightTrig};
+
 	if (ORBIT) {
 		cam.position = cam.position * rotateY(DEG_RAD * cam.lookSpeed);
 		glm::vec3 target = {0, 0, 0};
 		lookAt(target, cam);
 		window.clearPixels();
 	}
-
-	std::cout << to_string(lightSource.position) << std::endl;
 
 	switch (RENDER) {
 		case 1:
@@ -541,6 +549,8 @@ void draw(std::vector<ModelTriangle> &triangles, Light &lightSource, Camera &cam
 		case 4:
 			window.clearPixels();
 			raytrace(triangles, lightSource, cam, window);
+			// render triangle where light source is
+			wireFrame(extras, cam, window);
 			break;
 		default:
 			break;
@@ -619,7 +629,7 @@ void handleEvent(SDL_Event &event, Light &lightSource, Camera &cam, DrawingWindo
 			window.clearPixels();
 		}
 		else if (event.key.keysym.sym == SDLK_i) {
-				lightSource.position += glm::vec3(0, 0, -1) * cam.moveSpeed;
+			lightSource.position += glm::vec3(0, 0, -1) * cam.moveSpeed;
 		}
 		else if (event.key.keysym.sym == SDLK_k) {
 			lightSource.position += glm::vec3(0, 0, 1) * cam.moveSpeed;
@@ -799,9 +809,14 @@ std::vector<Colour> readMtl(const std::string &filename) {
 	for (auto &colour : colours) {
 		palette.insert({colour.name, colour});
 	}
+
+	// create vector of triangles
+	std::vector<ModelTriangle> triangles;
+
 	// read obj and assign triangle colours from palette
-	std::vector<ModelTriangle> triangles = readObj(OBJ, palette);
+	std::vector<ModelTriangle> box = readObj(OBJ, palette);
 	std::vector<ModelTriangle> sphere = readObj(SPH, palette);
+	triangles.insert(triangles.end(), box.begin(), box.end());
 	triangles.insert(triangles.end(), sphere.begin(), sphere.end());
 
 	// initialise light source and camera
