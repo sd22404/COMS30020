@@ -9,6 +9,7 @@ struct Light {
     glm::vec3 defaultPosition;
     float intensity;
     float radius;
+    float ambient;
     glm::vec3 position;
 
     Light();

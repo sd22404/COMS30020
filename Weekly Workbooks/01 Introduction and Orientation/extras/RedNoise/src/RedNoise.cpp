@@ -14,21 +14,21 @@
 #include <../extra/Camera.h>
 #include <../extra/Light.h>
 
-#define WIDTH 1280
-#define HEIGHT 960
+#define WIDTH 640
+#define HEIGHT 480
 
-#define DEG_RAD (2.0f * M_PI / 180.0f) // 0.5 degrees per input
+#define DEG_RAD (2.0f * M_PI / 180.0f)
 #define MIN_INTERSECT_DISTANCE 0.001f
-#define AMBIENT 0.4f
 #define RENDER_TYPES 4
 
 const std::string MTL = "../cornell-box.mtl";
 const std::string OBJ = "../cornell-box.obj";
+const std::string SPH = "../sphere.obj";
 
 bool ORBIT = false;
 int RENDER = 0;
 
-RayTriangleIntersection getClosestIntersection(std::vector<ModelTriangle> &triangles, glm::vec3 &startPoint, glm::vec3 &rayDirection) {
+RayTriangleIntersection closestIntersection(std::vector<ModelTriangle> &triangles, glm::vec3 &startPoint, glm::vec3 &rayDirection) {
 	float inverseClosestDistance = 0;
 	// initialise empty RayTriangleIntersection
 	RayTriangleIntersection closestIntersection;
@@ -58,7 +58,7 @@ RayTriangleIntersection getClosestIntersection(std::vector<ModelTriangle> &trian
 	return closestIntersection;
 }
 
-glm::vec3 getRayFromCanvasPoint(CanvasPoint &canvasPoint, Camera &cam, float canvasScale = HEIGHT / 2.0) {
+glm::vec3 rayFromCanvasPoint(CanvasPoint &canvasPoint, Camera &cam, float canvasScale = HEIGHT / 2.0) {
 	// convert from SDL coordinate system into 3D/model coordinate system
 	float x = canvasPoint.x - WIDTH / 2.0f;
 	float y = -canvasPoint.y + HEIGHT / 2.0f;
@@ -74,7 +74,7 @@ bool inShadow(std::vector<ModelTriangle> &triangles, glm::vec3 &surface, glm::ve
 	// calculate shadowRay direction
 	glm::vec3 shadowRay = lightPos - surface;
 	// get the closest intersection of shadowRay from surface
-	RayTriangleIntersection obstacle = getClosestIntersection(triangles, surface, shadowRay);
+	RayTriangleIntersection obstacle = closestIntersection(triangles, surface, shadowRay);
 	// if obstacle doesn't exist or is further than lightSource - no shadow
 	if (obstacle.triangleIndex == size_t(-1)) return false;
 	if (distance(surface, lightPos) < distance(surface, obstacle.intersectionPoint)) return false;
@@ -102,7 +102,7 @@ float specularLighting(glm::vec3 &point, glm::vec3 &normal, glm::vec3 &lightPos,
 	return brightness;
 }
 
-float getBrightness(glm::vec3 &point, glm::vec3 &normal, Light &lightSource, Camera &cam) {
+float pointBrightness(glm::vec3 &point, glm::vec3 &normal, Light &lightSource, Camera &cam) {
 	// calculate proximity lighting
 	float prox = proximityLighting(point, lightSource);
 	// calculate angle of incidence lighting
@@ -113,6 +113,28 @@ float getBrightness(glm::vec3 &point, glm::vec3 &normal, Light &lightSource, Cam
 	float brightness = prox * ang + spec;
 	brightness = glm::clamp(brightness, 0.0f, 1.0f);
 	return brightness;
+}
+
+glm::vec3 barycentric(glm::vec3 &point, ModelTriangle &triangle) {
+	glm::vec3 v0 = triangle.vertices[1] - triangle.vertices[0], v1 = triangle.vertices[2] - triangle.vertices[0], v2 = point - triangle.vertices[0];
+	float d00 = dot(v0, v0);
+	float d01 = dot(v0, v1);
+	float d11 = dot(v1, v1);
+	float d20 = dot(v2, v0);
+	float d21 = dot(v2, v1);
+	float denom = d00 * d11 - d01 * d01;
+	float v = (d11 * d20 - d01 * d21) / denom;
+	float w = (d00 * d21 - d01 * d20) / denom;
+	float u = 1.0f - v - w;
+
+	return {u, v, w};
+}
+
+glm::vec3 interpolateNormal(glm::vec3 &point, ModelTriangle &triangle) {
+	std::array<glm::vec3, 3> vNorms = triangle.vertexNormals;
+	glm::vec3 bCoords = barycentric(point, triangle);
+	glm::vec3 normal = bCoords.x * vNorms[2] + bCoords.y * vNorms[1] + bCoords.z * vNorms[0];
+	return normal;
 }
 
 
@@ -226,7 +248,7 @@ void drawTriangle(CanvasTriangle &triangle, Colour &colour, DrawingWindow &windo
 }
 
 
-CanvasPoint getExtraVertex(CanvasTriangle &triangle) {
+CanvasPoint extraVertex(CanvasTriangle &triangle) {
 	// get proportion of total height for middle vertex
 	float yProp = (triangle.v1().y - triangle.v0().y) / (triangle.v2().y - triangle.v0().y);
 	// interpolate Xs along desired edge and get x value that is 'y proportion' of the way along
@@ -337,7 +359,7 @@ void fillTriangle(bool textured, CanvasTriangle &triangle, std::vector<std::vect
 	}
 
 	// CALCULATE EXTRA MIDDLE VERTEX
-	CanvasPoint triangle_v3 = getExtraVertex(triangle);
+	CanvasPoint triangle_v3 = extraVertex(triangle);
 
 	// assign v0 through v3 based on orientation
 	CanvasPoint v0 = triangle.v0(); CanvasPoint v1; CanvasPoint v2 = triangle.v2(); CanvasPoint v3;
@@ -405,12 +427,12 @@ void interpolationTests() {
 	// test single interpolation
 	std::vector<float> result1;
 	result1 = interpolateSingleFloats(2.2, 8.5, 7);
-	for(auto i : result1) std::cout << i << " ";
+	for (auto i : result1) std::cout << i << " ";
 	std::cout << std::endl;
 	// test vec3 interpolation
 	std::vector<glm::vec3> result2;
 	result2 = interpolateThreeElementValues(glm::vec3(1.0, 4.0, 9.2), glm::vec3(4.0, 1.0, 9.8), 4);
-	for(auto i : result2) std::cout << "(" << i.x << ", " << i.y << ", " << i.z << ") " << std::endl;
+	for (auto i : result2) std::cout << "(" << i.x << ", " << i.y << ", " << i.z << ") " << std::endl;
 	std::cout << std::endl;
 }
 
@@ -472,13 +494,14 @@ void raytrace(std::vector<ModelTriangle> &triangles, Light &lightSource, Camera 
 	for (int y = 0; y < HEIGHT; y++) {
 		for (int x = 0; x < WIDTH; x++) {
 			CanvasPoint canvasPoint = CanvasPoint(float(x), float(y));
-			glm::vec3 rayDirection = getRayFromCanvasPoint(canvasPoint, cam);
-			RayTriangleIntersection intersection = getClosestIntersection(triangles, cam.position, rayDirection);
+			glm::vec3 rayDirection = rayFromCanvasPoint(canvasPoint, cam);
+			RayTriangleIntersection intersection = closestIntersection(triangles, cam.position, rayDirection);
 			if (intersection.triangleIndex != size_t(-1)) {
 				Colour colour = intersection.intersectedTriangle.colour;
-				float brightness = getBrightness(intersection.intersectionPoint, intersection.intersectedTriangle.normal, lightSource, cam);
+				glm::vec3 pointNormal = interpolateNormal(intersection.intersectionPoint, intersection.intersectedTriangle);
+				float brightness = pointBrightness(intersection.intersectionPoint, pointNormal, lightSource, cam);
 				if (inShadow(triangles, intersection.intersectionPoint, lightSource.position)) brightness = 0;
-				brightness = glm::max(brightness, AMBIENT);
+				brightness = glm::max(brightness, lightSource.ambient);
 				colour = {
 					int(float(colour.red) * brightness),
 					int(float(colour.green) * brightness),
@@ -499,6 +522,8 @@ void draw(std::vector<ModelTriangle> &triangles, Light &lightSource, Camera &cam
 		lookAt(target, cam);
 		window.clearPixels();
 	}
+
+	std::cout << to_string(lightSource.position) << std::endl;
 
 	switch (RENDER) {
 		case 1:
@@ -588,7 +613,7 @@ void handleEvent(SDL_Event &event, Light &lightSource, Camera &cam, DrawingWindo
 		else if (event.key.keysym.sym == SDLK_g) {
 			ORBIT = !ORBIT;
 		}
-		else if (event.key.keysym.sym == SDLK_h) {
+		else if (event.key.keysym.sym == SDLK_t) {
 			glm::vec3 target = {0, 0, 0};
 			lookAt(target, cam);
 			window.clearPixels();
@@ -610,6 +635,9 @@ void handleEvent(SDL_Event &event, Light &lightSource, Camera &cam, DrawingWindo
 		}
 		else if (event.key.keysym.sym == SDLK_p) {
 			lightSource.position += glm::vec3(0, 1, 0) * cam.moveSpeed;
+		}
+		else if (event.key.keysym.sym == SDLK_h) {
+			lightSource.position = lightSource.defaultPosition;
 		}
 		else if (event.key.keysym.sym == SDLK_LSHIFT) {
 			float oldSpeed = cam.moveSpeed;
@@ -651,10 +679,48 @@ void handleEvent(SDL_Event &event, Light &lightSource, Camera &cam, DrawingWindo
 }
 
 
+glm::vec3 vertexNormal(std::vector<ModelTriangle> &neighbours) {
+	glm::vec3 total;
+	// average the normal of each neighbouring triangle
+	for (auto &triangle : neighbours) {
+		total += triangle.normal;
+	}
+	total /= neighbours.size();
+	return total;
+}
+
+std::vector<ModelTriangle> neighbouringTriangles(glm::vec3 &vertex, std::vector<ModelTriangle> &triangles) {
+	// for each vertex on triangles in the model, if it's the same as given vertex, add to list
+	std::vector<ModelTriangle> neighbours;
+	for (auto &triangle : triangles) {
+		for (auto &v : triangle.vertices) {
+			if (v == vertex) {
+				neighbours.push_back(triangle);
+			}
+		}
+	}
+
+	return neighbours;
+}
+
+std::array<glm::vec3, 3> vertexNormals(ModelTriangle &triangle, std::vector<ModelTriangle> &triangles) {
+	// return a list of vertex normals (size will be three)
+	std::vector<glm::vec3> vertexNormals;
+	for (auto &vertex : triangle.vertices) {
+		std::vector<ModelTriangle> neighbours = neighbouringTriangles(vertex, triangles);
+		vertexNormals.push_back(vertexNormal(neighbours));
+	}
+
+	std::array<glm::vec3, 3> normalsArray;
+	std::copy_n(vertexNormals.begin(), 3, normalsArray.begin());
+	return normalsArray;
+}
+
+
 std::vector<ModelTriangle> readObj(const std::string &filename, std::map<std::string, Colour> &palette, float modelScale = 0.35) {
 	std::vector<ModelTriangle> triangles;
 	std::vector<glm::vec3> vertices;
-	Colour trigColour;
+	Colour trigColour = Colour(255, 255, 255);
 	std::string line;
 	std::ifstream file(filename);
 	// read from file
@@ -685,6 +751,10 @@ std::vector<ModelTriangle> readObj(const std::string &filename, std::map<std::st
 			modelTriangle.normal = normal;
 			triangles.emplace_back(modelTriangle);
 		}
+	}
+
+	for (auto triangle : triangles) {
+		triangle.vertexNormals = vertexNormals(triangle, triangles);
 	}
 
 	return triangles;
@@ -731,6 +801,8 @@ std::vector<Colour> readMtl(const std::string &filename) {
 	}
 	// read obj and assign triangle colours from palette
 	std::vector<ModelTriangle> triangles = readObj(OBJ, palette);
+	std::vector<ModelTriangle> sphere = readObj(SPH, palette);
+	triangles.insert(triangles.end(), sphere.begin(), sphere.end());
 
 	// initialise light source and camera
 	Camera camera = Camera(3.0f);
