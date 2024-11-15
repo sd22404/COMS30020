@@ -39,7 +39,9 @@ add_executable(RedNoise
         libs/extra/Camera.cpp
         libs/extra/Camera.h
         libs/extra/Light.cpp
-        libs/extra/Light.h)
+        libs/extra/Light.h
+        libs/extra/Vertex.cpp
+        libs/extra/Vertex.h)
 
 if (MSVC)
     target_compile_options(RedNoise

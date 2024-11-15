@@ -3,12 +3,25 @@
 
 ModelTriangle::ModelTriangle() = default;
 
-ModelTriangle::ModelTriangle(const glm::vec3 &v0, const glm::vec3 &v1, const glm::vec3 &v2, Colour trigColour) :
-		vertices({{v0, v1, v2}}), texturePoints(), colour(std::move(trigColour)), normal(), vertexNormals() {}
+ModelTriangle::ModelTriangle(const Vertex &v0, const Vertex &v1, const Vertex &v2, Colour trigColour) :
+		vertices({{v0, v1, v2}}), texturePoints(), colour(std::move(trigColour)), normal() {}
+
+glm::vec3 &ModelTriangle::v0() {
+	return {vertices[0].position};
+}
+
+glm::vec3 &ModelTriangle::v1() {
+	return {vertices[1].position};
+}
+
+glm::vec3 &ModelTriangle::v2() {
+	return {vertices[2].position};
+}
+
 
 std::ostream &operator<<(std::ostream &os, const ModelTriangle &triangle) {
-	os << "(" << triangle.vertices[0].x << ", " << triangle.vertices[0].y << ", " << triangle.vertices[0].z << ")\n";
-	os << "(" << triangle.vertices[1].x << ", " << triangle.vertices[1].y << ", " << triangle.vertices[1].z << ")\n";
-	os << "(" << triangle.vertices[2].x << ", " << triangle.vertices[2].y << ", " << triangle.vertices[2].z << ")\n";
+	os << "(" << triangle.vertices[0] << ")\n";
+	os << "(" << triangle.vertices[1] << ")\n";
+	os << "(" << triangle.vertices[2] << ")\n";
 	return os;
 }

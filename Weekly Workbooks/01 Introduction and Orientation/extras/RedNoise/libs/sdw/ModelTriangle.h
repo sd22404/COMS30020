@@ -5,15 +5,19 @@
 #include <array>
 #include "Colour.h"
 #include "TexturePoint.h"
+#include "../extra/Vertex.h"
 
 struct ModelTriangle {
-	std::array<glm::vec3, 3> vertices{};
+	std::array<Vertex, 3> vertices{};
 	std::array<TexturePoint, 3> texturePoints{};
 	Colour colour{};
 	glm::vec3 normal{};
-	std::array<glm::vec3, 3> vertexNormals{};
+
+	glm::vec3 &v0();
+	glm::vec3 &v1();
+	glm::vec3 &v2();
 
 	ModelTriangle();
-	ModelTriangle(const glm::vec3 &v0, const glm::vec3 &v1, const glm::vec3 &v2, Colour trigColour);
+	ModelTriangle(const Vertex &v0, const Vertex &v1, const Vertex &v2, Colour trigColour);
 	friend std::ostream &operator<<(std::ostream &os, const ModelTriangle &triangle);
 };

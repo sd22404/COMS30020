@@ -37,10 +37,10 @@ RayTriangleIntersection closestIntersection(std::vector<ModelTriangle> &triangle
 	for (int i = 0; i < triangles.size(); i++) {
 		ModelTriangle &triangle = triangles[i];
 		// calculate edge vectors
-		glm::vec3 e0 = triangle.vertices[1] - triangle.vertices[0];
-		glm::vec3 e1 = triangle.vertices[2] - triangle.vertices[0];
+		glm::vec3 e0 = triangle.v1() - triangle.v0();
+		glm::vec3 e1 = triangle.v2() - triangle.v0();
 		// calculate vector from startPoint to triangle
-		glm::vec3 SPVector = startPoint - triangle.vertices[0];
+		glm::vec3 SPVector = startPoint - triangle.v0();
 		// generate direction/edge matrix
 		glm::mat3 DEMatrix(-rayDirection, e0, e1);
 		// find possible solution in [t, u, v]
@@ -53,7 +53,6 @@ RayTriangleIntersection closestIntersection(std::vector<ModelTriangle> &triangle
 			closestIntersection = RayTriangleIntersection(startPoint + t * rayDirection, t, triangle, i, {u, v, 1.0f - u - v});
 			inverseClosestDistance = 1 / t;
 		}
-		std::cout << to_string(triangle.vertexNormals[0]) << std::endl;
 	}
 
 	return closestIntersection;
@@ -117,9 +116,9 @@ float pointBrightness(glm::vec3 &point, glm::vec3 &normal, Light &lightSource, C
 }
 
 glm::vec3 interpolateNormal(RayTriangleIntersection &intersection) {
-	std::array<glm::vec3, 3> vNorms = intersection.intersectedTriangle.vertexNormals;
+	std::array<Vertex, 3> vertices = intersection.intersectedTriangle.vertices;
 	glm::vec3 bCoords = intersection.barycentricIntersection;
-	glm::vec3 normal = bCoords.z * vNorms[0] + bCoords.x * vNorms[1] + bCoords.y * vNorms[2];
+	glm::vec3 normal = bCoords.z * vertices[0].normal + bCoords.x * vertices[1].normal + bCoords.y * vertices[2].normal;
 	return normal;
 }
 
@@ -441,8 +440,8 @@ void pointCloud(std::vector<ModelTriangle> &triangles, Camera &cam, DrawingWindo
 	for (auto &triangle: triangles) {
 		for (auto vertex : triangle.vertices) {
 			// for each vertex in model triangles, project onto canvas and colour white
-			CanvasPoint point = projectVertexOntoCanvasPoint(vertex, cam);
-			// check points are on-screen`
+			CanvasPoint point = projectVertexOntoCanvasPoint(vertex.position, cam);
+			// check points are on-screen
 			if (!isOffScreen(point)) {
 				uint32_t packedCol = (255 << 24) + (255 << 16) + (255 << 8) + 255;
 				window.setPixelColour(size_t(point.x), size_t(point.y), packedCol);
@@ -455,9 +454,9 @@ void wireFrame(std::vector<ModelTriangle> &triangles, Camera &cam, DrawingWindow
 	Colour colour = Colour(255, 255, 255);
 	for (auto triangle: triangles) {
 		// for each model triangle, project vertices onto canvas and draw resulting triangle
-		CanvasPoint v0 = projectVertexOntoCanvasPoint(triangle.vertices[0], cam);
-		CanvasPoint v1 = projectVertexOntoCanvasPoint(triangle.vertices[1], cam);
-		CanvasPoint v2 = projectVertexOntoCanvasPoint(triangle.vertices[2], cam);
+		CanvasPoint v0 = projectVertexOntoCanvasPoint(triangle.v0(), cam);
+		CanvasPoint v1 = projectVertexOntoCanvasPoint(triangle.v1(), cam);
+		CanvasPoint v2 = projectVertexOntoCanvasPoint(triangle.v2(), cam);
 		CanvasTriangle canvasTriangle = CanvasTriangle(v0, v1, v2);
 		drawTriangle(canvasTriangle, colour, window);
 	}
@@ -468,9 +467,9 @@ void raster(std::vector<ModelTriangle> &triangles, Camera &cam, DrawingWindow &w
 	std::vector<std::vector<float>> depthBuffer(HEIGHT, std::vector<float>(WIDTH, 0));
 	for (auto triangle: triangles) {
 		// for each model triangle, draw a filled triangle from projected points
-		CanvasPoint v0 = projectVertexOntoCanvasPoint(triangle.vertices[0], cam);
-		CanvasPoint v1 = projectVertexOntoCanvasPoint(triangle.vertices[1], cam);
-		CanvasPoint v2 = projectVertexOntoCanvasPoint(triangle.vertices[2], cam);
+		CanvasPoint v0 = projectVertexOntoCanvasPoint(triangle.v0(), cam);
+		CanvasPoint v1 = projectVertexOntoCanvasPoint(triangle.v1(), cam);
+		CanvasPoint v2 = projectVertexOntoCanvasPoint(triangle.v2(), cam);
 		CanvasTriangle canvasTriangle = CanvasTriangle(v0, v1, v2);
 		fillTriangle(false, canvasTriangle, depthBuffer, window, triangle.colour);
 	}
@@ -675,7 +674,7 @@ void handleEvent(SDL_Event &event, Light &lightSource, Camera &cam, DrawingWindo
 }
 
 
-glm::vec3 vertexNormal(std::vector<ModelTriangle> &neighbours) {
+glm::vec3 norm(std::vector<ModelTriangle> &neighbours) {
 	glm::vec3 total;
 	// average the normal of each neighbouring triangle
 	for (auto &triangle : neighbours) {
@@ -685,32 +684,18 @@ glm::vec3 vertexNormal(std::vector<ModelTriangle> &neighbours) {
 	return total;
 }
 
-std::vector<ModelTriangle> neighbouringTriangles(glm::vec3 &vertex, std::vector<ModelTriangle> &triangles) {
+glm::vec3 vertexNormal(Vertex &vertex, std::vector<ModelTriangle> &triangles) {
 	// for each vertex on triangles in the model, if it's the same as given vertex, add to list
 	std::vector<ModelTriangle> neighbours;
 	for (auto &triangle : triangles) {
 		for (auto &v : triangle.vertices) {
-			if (v == vertex) {
+			if (v.index == vertex.index) {
 				neighbours.push_back(triangle);
 			}
 		}
 	}
 
-	return neighbours;
-}
-
-std::array<glm::vec3, 3> vertexNormals(ModelTriangle &triangle, std::vector<ModelTriangle> &triangles) {
-	// return a list of vertex normals (size will be three)
-	std::vector<glm::vec3> vertexNormals;
-	for (auto &vertex : triangle.vertices) {
-		std::vector<ModelTriangle> neighbours = neighbouringTriangles(vertex, triangles);
-		vertexNormals.push_back(vertexNormal(neighbours));
-	}
-
-	std::array<glm::vec3, 3> normalsArray;
-	std::copy_n(vertexNormals.begin(), 3, normalsArray.begin());
-
-	return normalsArray;
+	return norm(neighbours);
 }
 
 
@@ -740,9 +725,10 @@ std::vector<ModelTriangle> readObj(const std::string &filename, std::map<std::st
 			int i0 = int(strtol(indices[1].c_str(), nullptr, 10) - 1);
 			int i1 = int(strtol(indices[2].c_str(), nullptr, 10) - 1);
 			int i2 = int(strtol(indices[3].c_str(), nullptr, 10) - 1);
-			glm::vec3 v0 = vertices[i0], v1 = vertices[i1], v2 = vertices[i2];
+			Vertex v0 = vertices[i0], v1 = vertices[i1], v2 = vertices[i2];
+			v0.index = i0; v1.index = i1; v2.index = i2;
 			// calculate normals
-			glm::vec3 normal = normalize(cross(v1 - v0, v2 - v0));
+			glm::vec3 normal = normalize(cross(v1.position - v0.position, v2.position - v0.position));
 			// add new triangle
 			ModelTriangle modelTriangle = {v0, v1, v2, trigColour};
 			modelTriangle.normal = normal;
@@ -750,9 +736,17 @@ std::vector<ModelTriangle> readObj(const std::string &filename, std::map<std::st
 		}
 	}
 
-	for (auto triangle : triangles) {
-		triangle.vertexNormals = vertexNormals(triangle, triangles);
-	};
+	for (auto &triangle : triangles) {
+		for (auto &v : triangle.vertices) {
+			v.normal = vertexNormal(v, triangles);
+			std::cout << v << std::endl;
+			std::cout << triangle << std::endl;
+		}
+	}
+
+	for (auto &triangle : triangles) {
+		std::cout << triangle << std::endl;
+	}
 
 	return triangles;
 }
