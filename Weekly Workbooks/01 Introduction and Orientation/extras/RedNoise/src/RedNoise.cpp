@@ -53,6 +53,7 @@ RayTriangleIntersection closestIntersection(std::vector<ModelTriangle> &triangle
 			closestIntersection = RayTriangleIntersection(startPoint + t * rayDirection, t, triangle, i, {u, v, 1.0f - u - v});
 			inverseClosestDistance = 1 / t;
 		}
+		std::cout << to_string(triangle.vertexNormals[0]) << std::endl;
 	}
 
 	return closestIntersection;
@@ -115,25 +116,10 @@ float pointBrightness(glm::vec3 &point, glm::vec3 &normal, Light &lightSource, C
 	return brightness;
 }
 
-glm::vec3 barycentric(glm::vec3 &point, ModelTriangle &triangle) {
-	glm::vec3 v0 = triangle.vertices[1] - triangle.vertices[0], v1 = triangle.vertices[2] - triangle.vertices[0], v2 = point - triangle.vertices[0];
-	float d00 = dot(v0, v0);
-	float d01 = dot(v0, v1);
-	float d11 = dot(v1, v1);
-	float d20 = dot(v2, v0);
-	float d21 = dot(v2, v1);
-	float denom = d00 * d11 - d01 * d01;
-	float v = (d11 * d20 - d01 * d21) / denom;
-	float w = (d00 * d21 - d01 * d20) / denom;
-	float u = 1.0f - v - w;
-
-	return {u, v, w};
-}
-
 glm::vec3 interpolateNormal(RayTriangleIntersection &intersection) {
 	std::array<glm::vec3, 3> vNorms = intersection.intersectedTriangle.vertexNormals;
 	glm::vec3 bCoords = intersection.barycentricIntersection;
-	glm::vec3 normal = bCoords.x * vNorms[0] + bCoords.y * vNorms[1] + bCoords.z * vNorms[2];
+	glm::vec3 normal = bCoords.z * vNorms[0] + bCoords.x * vNorms[1] + bCoords.y * vNorms[2];
 	return normal;
 }
 
@@ -499,7 +485,7 @@ void raytrace(std::vector<ModelTriangle> &triangles, Light &lightSource, Camera 
 			if (intersection.triangleIndex != size_t(-1)) {
 				Colour colour = intersection.intersectedTriangle.colour;
 				glm::vec3 pointNormal = interpolateNormal(intersection);
-				pointNormal = intersection.intersectedTriangle.normal;
+				//std::cout << "(" << to_string(intersection.intersectedTriangle.vertexNormals[0]) << ", " << to_string(intersection.intersectedTriangle.vertexNormals[1]) << ", " << to_string(intersection.intersectedTriangle.vertexNormals[2]) << "), " << to_string(pointNormal) << std::endl;
 				float brightness = pointBrightness(intersection.intersectionPoint, pointNormal, lightSource, cam);
 				if (inShadow(triangles, intersection.intersectionPoint, lightSource.position)) brightness = 0;
 				brightness = glm::max(brightness, lightSource.ambient);
@@ -723,6 +709,7 @@ std::array<glm::vec3, 3> vertexNormals(ModelTriangle &triangle, std::vector<Mode
 
 	std::array<glm::vec3, 3> normalsArray;
 	std::copy_n(vertexNormals.begin(), 3, normalsArray.begin());
+
 	return normalsArray;
 }
 
@@ -765,7 +752,7 @@ std::vector<ModelTriangle> readObj(const std::string &filename, std::map<std::st
 
 	for (auto triangle : triangles) {
 		triangle.vertexNormals = vertexNormals(triangle, triangles);
-	}
+	};
 
 	return triangles;
 }
@@ -816,6 +803,8 @@ std::vector<Colour> readMtl(const std::string &filename) {
 	// read obj and assign triangle colours from palette
 	std::vector<ModelTriangle> box = readObj(OBJ, palette);
 	std::vector<ModelTriangle> sphere = readObj(SPH, palette);
+
+	// insert obj triangles into vector of all triangles
 	triangles.insert(triangles.end(), box.begin(), box.end());
 	triangles.insert(triangles.end(), sphere.begin(), sphere.end());
 
