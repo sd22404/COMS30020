@@ -24,7 +24,6 @@
 const std::string BOX_OBJ = "./assets/cornell-box/cornell-box.obj";
 const std::string SPH_OBJ = "./assets/sphere/sphere.obj";
 const std::string HACK_OBJ = "./assets/hackspace-logo/logo.obj";
-const std::string HACK_TXT = "./assets/hackspace-logo/texture.ppm";
 
 bool ORBIT = false;
 int RENDER = 0;
