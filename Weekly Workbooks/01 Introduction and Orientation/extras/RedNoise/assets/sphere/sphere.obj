@@ -1,3 +1,5 @@
+mtllib sphere.mtl
+
 o sphere
 usemtl Red
 v 0.270598 0.576120 0.729402

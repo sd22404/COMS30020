@@ -13,9 +13,9 @@ struct ModelTriangle {
 	Colour colour{};
 	glm::vec3 normal{};
 
-	glm::vec3 &v0();
-	glm::vec3 &v1();
-	glm::vec3 &v2();
+	Vertex &v0();
+	Vertex &v1();
+	Vertex &v2();
 
 	ModelTriangle();
 	ModelTriangle(const Vertex &v0, const Vertex &v1, const Vertex &v2, Colour trigColour);

@@ -37,11 +37,8 @@ add_executable(RedNoise
         libs/sdw/Utils.cpp
         src/RedNoise.cpp
         libs/extra/Camera.cpp
-        libs/extra/Camera.h
         libs/extra/Light.cpp
-        libs/extra/Light.h
-        libs/extra/Vertex.cpp
-        libs/extra/Vertex.h)
+        libs/extra/Vertex.cpp)
 
 if (MSVC)
     target_compile_options(RedNoise

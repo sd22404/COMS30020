@@ -6,16 +6,16 @@ ModelTriangle::ModelTriangle() = default;
 ModelTriangle::ModelTriangle(const Vertex &v0, const Vertex &v1, const Vertex &v2, Colour trigColour) :
 		vertices({{v0, v1, v2}}), texturePoints(), colour(std::move(trigColour)), normal() {}
 
-glm::vec3 &ModelTriangle::v0() {
-	return {vertices[0].position};
+Vertex &ModelTriangle::v0() {
+	return {vertices[0]};
 }
 
-glm::vec3 &ModelTriangle::v1() {
-	return {vertices[1].position};
+Vertex &ModelTriangle::v1() {
+	return {vertices[1]};
 }
 
-glm::vec3 &ModelTriangle::v2() {
-	return {vertices[2].position};
+Vertex &ModelTriangle::v2() {
+	return {vertices[2]};
 }
 
 
