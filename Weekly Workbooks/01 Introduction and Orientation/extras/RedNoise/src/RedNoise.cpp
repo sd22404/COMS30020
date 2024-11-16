@@ -483,7 +483,7 @@ void wireFrame(std::vector<ModelTriangle> &triangles, Camera &cam, DrawingWindow
 	}
 }
 
-void raster(std::vector<ModelTriangle> &triangles, Camera &cam, DrawingWindow &window) {
+void raster(std::vector<ModelTriangle> &triangles, std::map<std::string, TextureMap> &textures, Camera &cam, DrawingWindow &window) {
 	// initialise depth buffer with zero-values
 	std::vector<std::vector<float>> depthBuffer(HEIGHT, std::vector<float>(WIDTH, 0));
 	for (auto triangle: triangles) {
@@ -492,11 +492,15 @@ void raster(std::vector<ModelTriangle> &triangles, Camera &cam, DrawingWindow &w
 		CanvasPoint v1 = projectVertexOntoCanvasPoint(triangle.v1().position, cam);
 		CanvasPoint v2 = projectVertexOntoCanvasPoint(triangle.v2().position, cam);
 		CanvasTriangle canvasTriangle = CanvasTriangle(v0, v1, v2);
-		fillTriangle(false, canvasTriangle, depthBuffer, window, triangle.colour);
+		if (!triangle.texture.empty()) {
+			fillTriangle(true, canvasTriangle, depthBuffer, window, Colour(), textures[triangle.texture]);
+		} else {
+			fillTriangle(false, canvasTriangle, depthBuffer, window, triangle.colour);
+		}
 	}
 }
 
-void raytrace(std::vector<ModelTriangle> &triangles, std::vector<TextureMap> &textures, Light &lightSource, Camera &cam, DrawingWindow &window) {
+void raytrace(std::vector<ModelTriangle> &triangles, std::map<std::string, TextureMap> &textures, std::vector<Light> &lights, Camera &cam, DrawingWindow &window) {
 	for (int y = 0; y < HEIGHT; y++) {
 		for (int x = 0; x < WIDTH; x++) {
 			// get the closest intersection of a ray through current (x,y) on the image plane
@@ -506,8 +510,8 @@ void raytrace(std::vector<ModelTriangle> &triangles, std::vector<TextureMap> &te
 			if (intersection.triangleIndex != size_t(-1)) {
 				Colour colour = intersection.intersectedTriangle.colour;
 				// if textured get colour from texture map
-				if (intersection.intersectedTriangle.texturePoints[0].x != -1) {
-					TextureMap &texture = textures[0];
+				if (!intersection.intersectedTriangle.texture.empty()) {
+					TextureMap &texture = textures[intersection.intersectedTriangle.texture];
 					TexturePoint texturePoint = interpolateTexturePoint(intersection.intersectedTriangle, intersection.barycentricPoint);
 					uint32_t packedCol = texture.pixels[int(round(texturePoint.y * float(texture.height))) * texture.width + int(round(texturePoint.x * float(texture.width)))];
 					uint32_t rgb = packedCol - (255 << 24);
@@ -517,17 +521,19 @@ void raytrace(std::vector<ModelTriangle> &triangles, std::vector<TextureMap> &te
 					colour = Colour(int(r), int(g), int(b));
 				}
 				// calculate brightness (Phong, Gouraud or face-normal techniques)
-				float brightness = phongBrightness(intersection, lightSource, cam);
-				// if in shadow set brightness to zero
-				if (inShadow(triangles, intersection.intersectionPoint, lightSource.position)) brightness = 0;
-				// clamp to ambient lighting
-				brightness = glm::max(brightness, lightSource.ambient);
-				// adjust colour based on brightness
-				colour = {
-					int(float(colour.red) * brightness),
-					int(float(colour.green) * brightness),
-					int(float(colour.blue) * brightness)
-				};
+				for (Light light : lights) {
+					float brightness = phongBrightness(intersection, light, cam);
+					// if in shadow set brightness to zero
+					if (inShadow(triangles, intersection.intersectionPoint, light.position)) brightness = 0;
+					// clamp to ambient lighting
+					brightness = glm::max(brightness, light.ambient);
+					// adjust colour based on brightness
+					colour = {
+						int(float(colour.red) * brightness),
+						int(float(colour.green) * brightness),
+						int(float(colour.blue) * brightness)
+					};
+				}
 				uint32_t packedCol = (255 << 24) + (int(colour.red) << 16) + (int(colour.green) << 8) + int(colour.blue);
 				window.setPixelColour(x, y, packedCol);
 			}
@@ -536,12 +542,12 @@ void raytrace(std::vector<ModelTriangle> &triangles, std::vector<TextureMap> &te
 }
 
 
-void draw(std::vector<ModelTriangle> &triangles, std::vector<TextureMap> &textures, Light &lightSource, Camera &cam, DrawingWindow &window) {
+void draw(std::vector<ModelTriangle> &triangles, std::map<std::string, TextureMap> &textures, std::vector<Light> &lights, Camera &cam, DrawingWindow &window) {
 	// create triangle for light source
 	ModelTriangle lightTrig = {
-		{lightSource.position.x - 0.025f, lightSource.position.y - 0.025f, lightSource.position.z},
-		{lightSource.position.x + 0.025f, lightSource.position.y - 0.025f, lightSource.position.z},
-		{lightSource.position.x, lightSource.position.y + 0.025f, lightSource.position.z},
+		{lights[0].position.x - 0.025f, lights[0].position.y - 0.025f, lights[0].position.z},
+		{lights[0].position.x + 0.025f, lights[0].position.y - 0.025f, lights[0].position.z},
+		{lights[0].position.x, lights[0].position.y + 0.025f, lights[0].position.z},
 		Colour(255, 255, 255)
 	};
 	std::vector<ModelTriangle> extras = {lightTrig};
@@ -564,11 +570,11 @@ void draw(std::vector<ModelTriangle> &triangles, std::vector<TextureMap> &textur
 			break;
 		case 3:
 			window.clearPixels();
-			raster(triangles, cam, window);
+			raster(triangles, textures, cam, window);
 			break;
 		case 4:
 			window.clearPixels();
-			raytrace(triangles, textures, lightSource, cam, window);
+			raytrace(triangles, textures, lights, cam, window);
 			// render triangle where light source is
 			wireFrame(extras, cam, window);
 			break;
@@ -750,10 +756,10 @@ std::tuple<std::map<std::string, Colour>, TextureMap> readMtl(const std::string 
 			palette.insert({name, Colour(name, r, g, b)});
 		}
 		if (splitln[0] == "map_Kd") {
+			// find texture filename and create TextureMap object
 			size_t parent = filename.find_last_of('/');
 			std::string texFile = filename.substr(0, parent + 1) + splitln[1];
 			texture = TextureMap(texFile);
-			palette.insert({texFile, Colour(texFile, 0, 0, 0)});
 		}
 	}
 
@@ -766,7 +772,7 @@ std::tuple<std::vector<ModelTriangle>, TextureMap> readObj(const std::string &fi
 	std::vector<TexturePoint> texturePoints;
 	std::map<std::string, Colour> palette;
 	TextureMap texture;
-	Colour trigColour = Colour(-1, -1, -1);
+	Colour trigColour;
 	std::string line;
 	std::vector<std::string> splitln;
 	std::ifstream file(filename);
@@ -778,8 +784,9 @@ std::tuple<std::vector<ModelTriangle>, TextureMap> readObj(const std::string &fi
 		if (splitln[0] == "mtllib") {
 			size_t parent = filename.find_last_of('/');
 			std::string matFile = filename.substr(0, parent + 1) + splitln[1];
-			palette = std::get<0>(readMtl(matFile));
-			texture = std::get<1>(readMtl(matFile));
+			std::tuple<std::map<std::string, Colour>, TextureMap> mtl = readMtl(matFile);
+			palette = std::get<0>(mtl);
+			texture = std::get<1>(mtl);
 		}
 		if (splitln[0] == "usemtl") {
 			// look up colour from palette when reading 'usemtl'
@@ -813,18 +820,18 @@ std::tuple<std::vector<ModelTriangle>, TextureMap> readObj(const std::string &fi
 			// set vertices and their indices
 			Vertex v0 = vertices[iv0], v1 = vertices[iv1], v2 = vertices[iv2];
 			v0.index = iv0; v1.index = iv1; v2.index = iv2;
-			// set texture points if used
-			std::array<TexturePoint, 3> tps = {TexturePoint(-1, -1), TexturePoint(-1, -1), TexturePoint(-1, -1)};
-			if(it0 != -1 && it1 != -1 && it2 != -1) {
-				TexturePoint t0 = texturePoints[it0], t1 = texturePoints[it1], t2 = texturePoints[it2];
-				tps = {t0, t1, t2};
-			}
 			// calculate triangle face normal
 			glm::vec3 normal = normalize(cross(v1.position - v0.position, v2.position - v0.position));
-			// add new triangle
+			// create new triangle
 			ModelTriangle modelTriangle = {v0, v1, v2, trigColour};
 			modelTriangle.normal = normal;
-			modelTriangle.texturePoints = tps;
+			// set texture points if used
+			if(it0 != -1 && it1 != -1 && it2 != -1) {
+				TexturePoint t0 = texturePoints[it0], t1 = texturePoints[it1], t2 = texturePoints[it2];
+				modelTriangle.texturePoints = {t0, t1, t2};
+				modelTriangle.texture = texture.name;
+			}
+			// add triangle
 			triangles.emplace_back(modelTriangle);
 		}
 	}
@@ -850,7 +857,7 @@ std::tuple<std::vector<ModelTriangle>, TextureMap> readObj(const std::string &fi
 	// READ OBJ AND MTL FILES
 	// create vector of triangles and textures
 	std::vector<ModelTriangle> triangles;
-	std::vector<TextureMap> textures;
+	std::map<std::string, TextureMap> textures;
 
 	// read obj files
 	std::vector<ModelTriangle> box = std::get<0>(readObj(BOX_OBJ));
@@ -866,16 +873,19 @@ std::tuple<std::vector<ModelTriangle>, TextureMap> readObj(const std::string &fi
 	triangles.insert(triangles.end(), hackTriangles.begin(), hackTriangles.end());
 
 	// insert obj textures into vector of all textures
-	textures.insert(textures.end(), hackTexture);
+	textures.insert({hackTexture.name, hackTexture});
 
 	// initialise light source and camera
 	Camera camera = Camera(3.0f);
 	Light light = Light(2.0f, 4.0f, glm::vec3(0.0f, 0.5f, 0.8f));
 
+	std::vector<Light> lights = {light};
+
+	// setup fps counter
 	time_t start = time(nullptr);
 	int frames = 0;
 	while (true) {
-		// fps counter
+		// basic fps counter
 		if (time(nullptr) - start >= 1) {
 			std::cout << "fps: " << frames << std::endl;
 			start = time(nullptr);
@@ -883,7 +893,7 @@ std::tuple<std::vector<ModelTriangle>, TextureMap> readObj(const std::string &fi
 		} frames++;
 		// We MUST poll for events - otherwise the window will freeze !
 		if (window.pollForInputEvents(event)) handleEvent(event, light, camera, window);
-		draw(triangles, textures, light, camera, window);
+		draw(triangles, textures, lights, camera, window);
 		// Need to render the frame at the end, or nothing actually gets shown on the screen !
 		window.renderFrame();
 	}

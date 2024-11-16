@@ -8,6 +8,7 @@
 
 class TextureMap {
 public:
+	std::string name;
 	size_t width;
 	size_t height;
 	std::vector<uint32_t> pixels;
