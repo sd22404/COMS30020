@@ -19,7 +19,7 @@
 
 #define DEG_RAD (2.0f * M_PI / 180.0f)
 #define MIN_INTERSECT_DISTANCE 0.001f
-#define RENDER_TYPES 4
+#define RENDER_TYPES 3
 
 const std::string BOX_OBJ = "./assets/cornell-box/cornell-box.obj";
 const std::string SPH_OBJ = "./assets/sphere/sphere.obj";
@@ -139,7 +139,7 @@ float phongBrightness(RayTriangleIntersection &intersection, Light &lightSource,
 
 
 TexturePoint interpolateTexturePoint(ModelTriangle &triangle, glm::vec3 &bCoords) {
-	TexturePoint tp = bCoords.x * triangle.texturePoints[1] + bCoords.y * triangle.texturePoints[2] + bCoords.z * triangle.texturePoints[0];
+	TexturePoint tp = bCoords.x * triangle.v1().texturePoint + bCoords.y * triangle.v2().texturePoint + bCoords.z * triangle.v0().texturePoint;
 	return tp;
 }
 
@@ -275,7 +275,7 @@ CanvasPoint extraVertex(CanvasTriangle &triangle) {
 	return v3;
 }
 
-void fillHalfTriangle(bool top, bool textured, CanvasPoint &v0, CanvasPoint &v1, CanvasPoint &v2, CanvasPoint &v3, std::vector<std::vector<float>> &depthBuffer, DrawingWindow &window, const Colour &colour = Colour(), const TextureMap &textureMap = TextureMap()) {
+void fillHalfTriangle(bool top, bool textured, CanvasPoint &v0, CanvasPoint &v1, CanvasPoint &v2, CanvasPoint &v3, std::vector<std::vector<float>> &depthBuffer, DrawingWindow &window, const Colour &colour = Colour(), const TextureMap &texture = TextureMap()) {
 	int minY, minX, maxY, maxX;
 	std::vector<float> upperBound, lowerBound, rightDepth, leftDepth, rowDepth;
 	std::vector<glm::vec3> rightTexture, leftTexture, rowTexture;
@@ -338,7 +338,7 @@ void fillHalfTriangle(bool top, bool textured, CanvasPoint &v0, CanvasPoint &v1,
 					if (depthBuffer.at(y).at(x) < rowDepth[x - int(ceil(lowerBound[y - minY]))]) {
 						if (textured) {
 							glm::vec3 texturePoint = rowTexture[x - int(ceil(lowerBound[y - minY]))];
-							packedCol = textureMap.pixels[int(round(texturePoint.x)) + textureMap.width * int(round(texturePoint.y))];
+							packedCol = texture.pixels[int(round(texturePoint.y * float(texture.height))) * texture.width + int(round(texturePoint.x * float(texture.width)))];
 						}
 						window.setPixelColour(x, y, packedCol);
 						depthBuffer.at(y).at(x) = rowDepth[x - int(ceil(lowerBound[y - minY]))];
@@ -445,15 +445,15 @@ void interpolationTests() {
 void textureTriangleTest(DrawingWindow &window) {
 	// TEXTURE TRIANGLE TEST
 	std::vector<std::vector<float>> depthBuffer(HEIGHT, std::vector<float>(WIDTH, 0));
+	TextureMap texture = TextureMap("./assets/triangle/texture.ppm");
 	CanvasPoint v0 = CanvasPoint(160, 10, 1);
 	CanvasPoint v1 = CanvasPoint(300, 230, 1);
 	CanvasPoint v2 = CanvasPoint(10, 150, 1);
-	v0.texturePoint.x = 195; v0.texturePoint.y = 5;
-	v1.texturePoint.x = 395; v1.texturePoint.y = 380;
-	v2.texturePoint.x = 65; v2.texturePoint.y = 330;
+	v0.texturePoint.x = 195.0f / float(texture.width); v0.texturePoint.y = 5.0f / float(texture.height);
+	v1.texturePoint.x = 395.0f / float(texture.width); v1.texturePoint.y = 380.0f / float(texture.height);
+	v2.texturePoint.x = 65.0f / float(texture.width); v2.texturePoint.y = 330.0f / float(texture.height);
 	CanvasTriangle canvasTriangle = CanvasTriangle(v0, v1, v2);
-	TextureMap textureMap = TextureMap("texture.ppm");
-	fillTriangle(true, canvasTriangle, depthBuffer, window, Colour(), textureMap);
+	fillTriangle(true, canvasTriangle, depthBuffer, window, Colour(), texture);
 }
 
 
@@ -489,14 +489,13 @@ void raster(std::vector<ModelTriangle> &triangles, std::map<std::string, Texture
 	for (auto triangle: triangles) {
 		// for each model triangle, draw a filled triangle from projected points
 		CanvasPoint v0 = projectVertexOntoCanvasPoint(triangle.v0().position, cam);
+		v0.texturePoint = triangle.v0().texturePoint;
 		CanvasPoint v1 = projectVertexOntoCanvasPoint(triangle.v1().position, cam);
+		v1.texturePoint = triangle.v1().texturePoint;
 		CanvasPoint v2 = projectVertexOntoCanvasPoint(triangle.v2().position, cam);
+		v2.texturePoint = triangle.v2().texturePoint;
 		CanvasTriangle canvasTriangle = CanvasTriangle(v0, v1, v2);
-		if (!triangle.texture.empty()) {
-			fillTriangle(true, canvasTriangle, depthBuffer, window, Colour(), textures[triangle.texture]);
-		} else {
-			fillTriangle(false, canvasTriangle, depthBuffer, window, triangle.colour);
-		}
+		fillTriangle(!triangle.texture.empty(), canvasTriangle, depthBuffer, window, triangle.colour, textures[triangle.texture]);
 	}
 }
 
@@ -559,7 +558,7 @@ void draw(std::vector<ModelTriangle> &triangles, std::map<std::string, TextureMa
 		window.clearPixels();
 	}
 
-	switch (RENDER) {
+	switch (RENDER + 2) {
 		case 1:
 			window.clearPixels();
 			pointCloud(triangles, cam, window);
@@ -686,8 +685,7 @@ void handleEvent(SDL_Event &event, Light &lightSource, Camera &cam, DrawingWindo
 		}
 		else if (event.key.keysym.sym == SDLK_LCTRL) {
 			RENDER++;
-			RENDER %= (RENDER_TYPES + 1);
-			if (RENDER == 0) window.clearPixels();
+			RENDER %= (RENDER_TYPES);
 		}
 		else if (event.key.keysym.sym == SDLK_u) {
 			Colour colour = Colour(rand() % 255, rand() % 255, rand() % 255);
@@ -820,17 +818,17 @@ std::tuple<std::vector<ModelTriangle>, TextureMap> readObj(const std::string &fi
 			// set vertices and their indices
 			Vertex v0 = vertices[iv0], v1 = vertices[iv1], v2 = vertices[iv2];
 			v0.index = iv0; v1.index = iv1; v2.index = iv2;
+			// set texture points if used
+			if(it0 != -1 && it1 != -1 && it2 != -1) {
+				TexturePoint t0 = texturePoints[it0], t1 = texturePoints[it1], t2 = texturePoints[it2];
+				v0.texturePoint = t0; v1.texturePoint = t1; v2.texturePoint = t2;
+			}
 			// calculate triangle face normal
 			glm::vec3 normal = normalize(cross(v1.position - v0.position, v2.position - v0.position));
 			// create new triangle
 			ModelTriangle modelTriangle = {v0, v1, v2, trigColour};
 			modelTriangle.normal = normal;
-			// set texture points if used
-			if(it0 != -1 && it1 != -1 && it2 != -1) {
-				TexturePoint t0 = texturePoints[it0], t1 = texturePoints[it1], t2 = texturePoints[it2];
-				modelTriangle.texturePoints = {t0, t1, t2};
-				modelTriangle.texture = texture.name;
-			}
+			modelTriangle.texture = texture.name;
 			// add triangle
 			triangles.emplace_back(modelTriangle);
 		}
