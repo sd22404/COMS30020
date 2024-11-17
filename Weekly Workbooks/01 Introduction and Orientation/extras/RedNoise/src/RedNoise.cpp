@@ -12,7 +12,7 @@
 #include <glm/gtx/string_cast.hpp>
 
 #include <../extra/Camera.h>
-#include <../extra/Light.h>
+#include <../extra/PointLight.h>
 
 #define WIDTH 640
 #define HEIGHT 480
@@ -20,6 +20,7 @@
 #define DEG_RAD (2.0f * M_PI / 180.0f)
 #define MIN_INTERSECT_DISTANCE 0.001f
 #define RENDER_TYPES 3
+#define AMBIENT 0.2f
 
 const std::string BOX_OBJ = "./assets/cornell-box/cornell-box.obj";
 const std::string SPH_OBJ = "./assets/sphere/sphere.obj";
@@ -72,68 +73,67 @@ glm::vec3 rayFromCanvasPoint(CanvasPoint &canvasPoint, Camera &cam, float canvas
 	return ray;
 }
 
-bool inShadow(std::vector<ModelTriangle> &triangles, glm::vec3 &surface, glm::vec3 &lightPos) {
+bool inShadow(std::vector<ModelTriangle> &triangles, glm::vec3 &surface, PointLight &light) {
 	// calculate shadowRay direction
-	glm::vec3 shadowRay = lightPos - surface;
+	glm::vec3 shadowRay = light.position - surface;
 	// get the closest intersection of shadowRay from surface
 	RayTriangleIntersection obstacle = closestIntersection(triangles, surface, shadowRay);
-	// if obstacle doesn't exist or is further than lightSource - no shadow
+	// if obstacle doesn't exist or is further than light source - no shadow
 	if (obstacle.triangleIndex == size_t(-1)) return false;
-	if (distance(surface, lightPos) <= distance(surface, obstacle.intersectionPoint)) return false;
+	if (distance(surface, light.position) <= distance(surface, obstacle.intersectionPoint)) return false;
 	return true;
 }
 
-float proximityLighting(glm::vec3 &point, Light &lightSource) {
-	float dist = length(lightSource.position - point);
-	float rDist = dist / lightSource.radius;
-	float brightness = lightSource.intensity / (4 * M_PIf * rDist * rDist);
+float proximityLighting(glm::vec3 &point, PointLight &light) {
+	float dist = length(light.position - point);
+	float brightness = light.intensity / (dist * dist);
 	return brightness;
 }
 
-float angularLighting(glm::vec3 &point, glm::vec3 &normal, glm::vec3 &lightPos) {
-	float angle = dot(normal, normalize(lightPos - point));
+float angularLighting(glm::vec3 &point, glm::vec3 &normal, PointLight &light) {
+	float angle = dot(normal, normalize(light.position - point));
 	float brightness = angle;
 	return brightness;
 }
 
-float specularLighting(glm::vec3 &point, glm::vec3 &normal, glm::vec3 &lightPos, glm::vec3 &camPos, float n = 256) {
+float specularLighting(glm::vec3 &point, glm::vec3 &normal, PointLight &light, glm::vec3 &camPos, float n = 256) {
 	glm::vec3 view = normalize(point - camPos);
-	glm::vec3 incidence = normalize(point - lightPos);
-	glm::vec3 reflection = incidence - 2.0f * normal * (dot(incidence, normal));
+	glm::vec3 incidence = normalize(point - light.position);
+	glm::vec3 reflection = incidence - 2.0f * normal * dot(incidence, normal);
 	float brightness = pow(dot(reflection, view), n);
 	return brightness;
 }
 
-float pointBrightness(glm::vec3 &point, glm::vec3 &normal, Light &lightSource, Camera &cam) {
+float pointBrightness(glm::vec3 &point, glm::vec3 &normal, PointLight &light, Camera &cam) {
 	// calculate proximity lighting
-	float prox = proximityLighting(point, lightSource);
+	float prox = proximityLighting(point, light);
 	// calculate angle of incidence lighting
-	float ang = angularLighting(point, normal, lightSource.position);
+	float ang = angularLighting(point, normal, light);
 	// calculate specular lighting
-	float spec = specularLighting(point, normal, lightSource.position, cam.position);
+	float spec = specularLighting(point, normal, light, cam.position);
 
 	float brightness = prox * ang + spec;
 	brightness = glm::clamp(brightness, 0.0f, 1.0f);
 	return brightness;
 }
 
-float gouraudBrightness(RayTriangleIntersection &intersection, Light &lightSource, Camera &cam) {
+float gouraudBrightness(RayTriangleIntersection &intersection, PointLight &light, Camera &cam) {
 	glm::vec3 &bCoords = intersection.barycentricPoint;
 	glm::vec3 &v0_norm = intersection.intersectedTriangle.v0().normal;
 	glm::vec3 &v1_norm = intersection.intersectedTriangle.v1().normal;
 	glm::vec3 &v2_norm = intersection.intersectedTriangle.v2().normal;
-	float v0_brightness = pointBrightness(intersection.intersectionPoint, v0_norm, lightSource, cam);
-	float v1_brightness = pointBrightness(intersection.intersectionPoint, v1_norm, lightSource, cam);
-	float v2_brightness = pointBrightness(intersection.intersectionPoint, v2_norm, lightSource, cam);
+	float v0_brightness = pointBrightness(intersection.intersectionPoint, v0_norm, light, cam);
+	float v1_brightness = pointBrightness(intersection.intersectionPoint, v1_norm, light, cam);
+	float v2_brightness = pointBrightness(intersection.intersectionPoint, v2_norm, light, cam);
 	float brightness = bCoords.x * v1_brightness + bCoords.y * v2_brightness + bCoords.z * v0_brightness;
 	return brightness;
 }
 
-float phongBrightness(RayTriangleIntersection &intersection, Light &lightSource, Camera &cam) {
+float phongBrightness(RayTriangleIntersection &intersection, PointLight &light, Camera &cam) {
 	ModelTriangle &triangle = intersection.intersectedTriangle;
 	glm::vec3 &bCoords = intersection.barycentricPoint;
-	glm::vec3 normal = bCoords.x * triangle.v1().normal + bCoords.y * triangle.v2().normal + bCoords.z * triangle.v0().normal;
-	float brightness = pointBrightness(intersection.intersectionPoint, normal, lightSource, cam);
+	glm::vec3 normal = normalize(bCoords.x * triangle.v1().normal + bCoords.y * triangle.v2().normal + bCoords.z * triangle.v0().normal);
+	float brightness = pointBrightness(intersection.intersectionPoint, normal, light, cam);
 	return brightness;
 }
 
@@ -499,7 +499,7 @@ void raster(std::vector<ModelTriangle> &triangles, std::map<std::string, Texture
 	}
 }
 
-void raytrace(std::vector<ModelTriangle> &triangles, std::map<std::string, TextureMap> &textures, std::vector<Light> &lights, Camera &cam, DrawingWindow &window) {
+void raytrace(std::vector<ModelTriangle> &triangles, std::map<std::string, TextureMap> &textures, std::vector<PointLight> &lights, Camera &cam, DrawingWindow &window) {
 	for (int y = 0; y < HEIGHT; y++) {
 		for (int x = 0; x < WIDTH; x++) {
 			// get the closest intersection of a ray through current (x,y) on the image plane
@@ -508,6 +508,7 @@ void raytrace(std::vector<ModelTriangle> &triangles, std::map<std::string, Textu
 			RayTriangleIntersection intersection = closestIntersection(triangles, cam.position, rayDirection);
 			if (intersection.triangleIndex != size_t(-1)) {
 				Colour colour = intersection.intersectedTriangle.colour;
+				float brightness = 0.0f;
 				// if textured get colour from texture map
 				if (!intersection.intersectedTriangle.texture.empty()) {
 					TextureMap &texture = textures[intersection.intersectedTriangle.texture];
@@ -519,20 +520,21 @@ void raytrace(std::vector<ModelTriangle> &triangles, std::map<std::string, Textu
 					uint32_t b = (rgb - (r << 16) - (g << 8));
 					colour = Colour(int(r), int(g), int(b));
 				}
-				// calculate brightness (Phong, Gouraud or face-normal techniques)
-				for (Light light : lights) {
-					float brightness = phongBrightness(intersection, light, cam);
+				// calculate brightness (Phong, Gouraud or face-normal techniques) for each light
+				for (PointLight light : lights) {
+					float newBrightness = phongBrightness(intersection, light, cam);
 					// if in shadow set brightness to zero
-					if (inShadow(triangles, intersection.intersectionPoint, light.position)) brightness = 0;
-					// clamp to ambient lighting
-					brightness = glm::max(brightness, light.ambient);
-					// adjust colour based on brightness
-					colour = {
-						int(float(colour.red) * brightness),
-						int(float(colour.green) * brightness),
-						int(float(colour.blue) * brightness)
-					};
+					if (!inShadow(triangles, intersection.intersectionPoint, light)) newBrightness = 0;
+					brightness += newBrightness;
 				}
+				// clamp between ambient lighting and one
+				brightness = glm::clamp(brightness, AMBIENT, 1.0f);
+				// adjust colour based on brightness
+				colour = {
+					int(float(colour.red) * brightness),
+					int(float(colour.green) * brightness),
+					int(float(colour.blue) * brightness)
+				};
 				uint32_t packedCol = (255 << 24) + (int(colour.red) << 16) + (int(colour.green) << 8) + int(colour.blue);
 				window.setPixelColour(x, y, packedCol);
 			}
@@ -541,12 +543,13 @@ void raytrace(std::vector<ModelTriangle> &triangles, std::map<std::string, Textu
 }
 
 
-void draw(std::vector<ModelTriangle> &triangles, std::map<std::string, TextureMap> &textures, std::vector<Light> &lights, Camera &cam, DrawingWindow &window) {
+void draw(std::vector<ModelTriangle> &triangles, std::map<std::string, TextureMap> &textures, std::vector<PointLight> &lights, Camera &cam, DrawingWindow &window) {
+	PointLight &testLight = lights.at(0);
 	// create triangle for light source
 	ModelTriangle lightTrig = {
-		{lights[0].position.x - 0.025f, lights[0].position.y - 0.025f, lights[0].position.z},
-		{lights[0].position.x + 0.025f, lights[0].position.y - 0.025f, lights[0].position.z},
-		{lights[0].position.x, lights[0].position.y + 0.025f, lights[0].position.z},
+		{testLight.position.x - 0.025f, testLight.position.y - 0.025f, testLight.position.z},
+		{testLight.position.x + 0.025f, testLight.position.y - 0.025f, testLight.position.z},
+		{testLight.position.x, testLight.position.y + 0.025f, testLight.position.z},
 		Colour(255, 255, 255)
 	};
 	std::vector<ModelTriangle> extras = {lightTrig};
@@ -558,20 +561,18 @@ void draw(std::vector<ModelTriangle> &triangles, std::map<std::string, TextureMa
 		window.clearPixels();
 	}
 
-	switch (RENDER + 2) {
-		case 1:
-			window.clearPixels();
-			pointCloud(triangles, cam, window);
-			break;
-		case 2:
+	switch (RENDER) {
+		case 0:
 			window.clearPixels();
 			wireFrame(triangles, cam, window);
 			break;
-		case 3:
+		case 1:
 			window.clearPixels();
 			raster(triangles, textures, cam, window);
+			// render triangle where light source is
+			wireFrame(extras, cam, window);
 			break;
-		case 4:
+		case 2:
 			window.clearPixels();
 			raytrace(triangles, textures, lights, cam, window);
 			// render triangle where light source is
@@ -582,7 +583,8 @@ void draw(std::vector<ModelTriangle> &triangles, std::map<std::string, TextureMa
 	}
 }
 
-void handleEvent(SDL_Event &event, Light &lightSource, Camera &cam, DrawingWindow &window) {
+void handleEvent(SDL_Event &event, std::vector<PointLight> &lights, Camera &cam, DrawingWindow &window) {
+	PointLight &testLight = lights.at(0);
 	if (event.type == SDL_KEYDOWN) {
 		// move left
 		if (event.key.keysym.sym == SDLK_a) {
@@ -624,56 +626,71 @@ void handleEvent(SDL_Event &event, Light &lightSource, Camera &cam, DrawingWindo
 			cam.position = cam.position * rotateY(DEG_RAD * cam.lookSpeed);
 			window.clearPixels();
 		}
+		// look left
 		else if (event.key.keysym.sym == SDLK_LEFT) {
 			cam.rotation = rotateY(DEG_RAD * cam.lookSpeed) * cam.rotation;
 			window.clearPixels();
 		}
+		// look right
 		else if (event.key.keysym.sym == SDLK_RIGHT) {
 			cam.rotation = rotateY(DEG_RAD * -cam.lookSpeed) * cam.rotation;
 			window.clearPixels();
 		}
+		// look up
 		else if (event.key.keysym.sym == SDLK_UP) {
 			cam.rotation = rotateV(cam.rotation[0], DEG_RAD * -cam.lookSpeed) * cam.rotation;
 			window.clearPixels();
 		}
+		// look down
 		else if (event.key.keysym.sym == SDLK_DOWN) {
 			cam.rotation = rotateV(cam.rotation[0], DEG_RAD * cam.lookSpeed) * cam.rotation;
 			window.clearPixels();
 		}
+		// reset position and rotation
 		else if (event.key.keysym.sym == SDLK_SPACE) {
 			cam.position = cam.defaultPosition;
 			cam.rotation = cam.defaultRotation;
 			window.clearPixels();
 		}
+		// toggle orbit
 		else if (event.key.keysym.sym == SDLK_g) {
 			ORBIT = !ORBIT;
 		}
+		// look at origin
 		else if (event.key.keysym.sym == SDLK_t) {
 			glm::vec3 target = {0, 0, 0};
 			lookAt(target, cam);
 			window.clearPixels();
 		}
+		// move light forward
 		else if (event.key.keysym.sym == SDLK_i) {
-			lightSource.position += glm::vec3(0, 0, -1) * cam.moveSpeed;
+			testLight.position += glm::vec3(0, 0, -1) * cam.moveSpeed;
 		}
+		// move light backward
 		else if (event.key.keysym.sym == SDLK_k) {
-			lightSource.position += glm::vec3(0, 0, 1) * cam.moveSpeed;
+			testLight.position += glm::vec3(0, 0, 1) * cam.moveSpeed;
 		}
+		// move light left
 		else if (event.key.keysym.sym == SDLK_j) {
-			lightSource.position += glm::vec3(-1, 0, 0) * cam.moveSpeed;
+			testLight.position += glm::vec3(-1, 0, 0) * cam.moveSpeed;
 		}
+		// move light right
 		else if (event.key.keysym.sym == SDLK_l) {
-			lightSource.position += glm::vec3(1, 0, 0) * cam.moveSpeed;
+			testLight.position += glm::vec3(1, 0, 0) * cam.moveSpeed;
 		}
+		// move light down
 		else if (event.key.keysym.sym == SDLK_o) {
-			lightSource.position += glm::vec3(0, -1, 0) * cam.moveSpeed;
+			testLight.position += glm::vec3(0, -1, 0) * cam.moveSpeed;
 		}
+		// move light up
 		else if (event.key.keysym.sym == SDLK_p) {
-			lightSource.position += glm::vec3(0, 1, 0) * cam.moveSpeed;
+			testLight.position += glm::vec3(0, 1, 0) * cam.moveSpeed;
 		}
-		else if (event.key.keysym.sym == SDLK_h) {
-			lightSource.position = lightSource.defaultPosition;
+		// reset light position
+		else if (event.key.keysym.sym == SDLK_u) {
+			testLight.position = testLight.defaultPosition;
 		}
+		// toggle fast movement
 		else if (event.key.keysym.sym == SDLK_LSHIFT) {
 			float oldSpeed = cam.moveSpeed;
 			cam.moveSpeed = cam.altMoveSpeed;
@@ -683,11 +700,13 @@ void handleEvent(SDL_Event &event, Light &lightSource, Camera &cam, DrawingWindo
 			cam.lookSpeed = cam.altLookSpeed;
 			cam.altLookSpeed = oldSpeed;
 		}
+		// rotate through render modes
 		else if (event.key.keysym.sym == SDLK_LCTRL) {
 			RENDER++;
 			RENDER %= (RENDER_TYPES);
 		}
-		else if (event.key.keysym.sym == SDLK_u) {
+		// unfilled triangle
+		else if (event.key.keysym.sym == SDLK_h) {
 			Colour colour = Colour(rand() % 255, rand() % 255, rand() % 255);
 			CanvasTriangle canvasTriangle = CanvasTriangle(
 					CanvasPoint(float(rand() % WIDTH), float(rand() % HEIGHT), 1),
@@ -695,6 +714,7 @@ void handleEvent(SDL_Event &event, Light &lightSource, Camera &cam, DrawingWindo
 					CanvasPoint(float(rand() % WIDTH), float(rand() % HEIGHT), 1));
 			drawTriangle(canvasTriangle, colour, window);
 		}
+		// filled triangle
 		else if (event.key.keysym.sym == SDLK_y) {
 			std::vector<std::vector<float>> depthBuffer(HEIGHT, std::vector<float>(WIDTH, 0));
 			Colour colour = Colour(rand() % 255, rand() % 255, rand() % 255);
@@ -726,8 +746,8 @@ glm::vec3 vertexNormal(Vertex &vertex, std::vector<ModelTriangle> &triangles) {
 		}
 	}
 
-	// divide by number of neighbours to get average
-	total /= neighbours;
+	// normalize total to get average normal
+	total = normalize(total);
 	return total;
 }
 
@@ -861,13 +881,13 @@ std::tuple<std::vector<ModelTriangle>, TextureMap> readObj(const std::string &fi
 	std::vector<ModelTriangle> box = std::get<0>(readObj(BOX_OBJ));
 	std::vector<ModelTriangle> sphere = std::get<0>(readObj(SPH_OBJ));
 
-	std::tuple<std::vector<ModelTriangle>, TextureMap> hackspace = readObj(HACK_OBJ, 0.002f);
+	std::tuple<std::vector<ModelTriangle>, TextureMap> hackspace = readObj(HACK_OBJ, 0.001f);
 	std::vector<ModelTriangle> hackTriangles = std::get<0>(hackspace);
 	TextureMap hackTexture = std::get<1>(hackspace);
 
 	// insert obj triangles into vector of all triangles (if needed)
 	triangles.insert(triangles.end(), box.begin(), box.end());
-	//triangles.insert(triangles.end(), sphere.begin(), sphere.end());
+	triangles.insert(triangles.end(), sphere.begin(), sphere.end());
 	triangles.insert(triangles.end(), hackTriangles.begin(), hackTriangles.end());
 
 	// insert obj textures into vector of all textures
@@ -875,22 +895,24 @@ std::tuple<std::vector<ModelTriangle>, TextureMap> readObj(const std::string &fi
 
 	// initialise light source and camera
 	Camera camera = Camera(3.0f);
-	Light light = Light(2.0f, 4.0f, glm::vec3(0.0f, 0.5f, 0.8f));
+	PointLight light = PointLight(2.0f);
 
-	std::vector<Light> lights = {light};
+	std::vector<PointLight> lights = {light};
 
 	// setup fps counter
 	time_t start = time(nullptr);
+	time_t elapsed;
 	int frames = 0;
 	while (true) {
 		// basic fps counter
-		if (time(nullptr) - start >= 1) {
-			std::cout << "fps: " << frames << std::endl;
+		elapsed = time(nullptr) - start;
+		if (elapsed >= 1) {
+			std::cout << "fps: " << frames / elapsed << std::endl;
 			start = time(nullptr);
 			frames = 0;
 		} frames++;
 		// We MUST poll for events - otherwise the window will freeze !
-		if (window.pollForInputEvents(event)) handleEvent(event, light, camera, window);
+		if (window.pollForInputEvents(event)) handleEvent(event, lights, camera, window);
 		draw(triangles, textures, lights, camera, window);
 		// Need to render the frame at the end, or nothing actually gets shown on the screen !
 		window.renderFrame();

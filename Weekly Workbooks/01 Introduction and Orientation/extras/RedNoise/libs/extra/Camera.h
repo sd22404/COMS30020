@@ -1,5 +1,5 @@
-#ifndef CAMERA_H
-#define CAMERA_H
+#pragma once
+
 #include <ostream>
 #include <glm/detail/type_mat3x3.hpp>
 #include <glm/detail/type_vec3.hpp>
@@ -24,7 +24,3 @@ struct Camera {
 
     friend std::ostream &operator<<(std::ostream &os, const Camera &cam);
 };
-
-
-
-#endif //CAMERA_H

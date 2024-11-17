@@ -36,9 +36,10 @@ add_executable(RedNoise
         libs/sdw/TexturePoint.cpp
         libs/sdw/Utils.cpp
         src/RedNoise.cpp
+        libs/extra/Vertex.cpp
         libs/extra/Camera.cpp
-        libs/extra/Light.cpp
-        libs/extra/Vertex.cpp)
+        libs/extra/PointLight.cpp
+        libs/extra/AreaLight.cpp)
 
 if (MSVC)
     target_compile_options(RedNoise
