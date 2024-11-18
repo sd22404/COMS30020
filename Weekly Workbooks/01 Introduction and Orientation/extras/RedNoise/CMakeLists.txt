@@ -19,10 +19,11 @@ set(CMAKE_CXX_STANDARD 14)
 # Note, we do this for glm because it's a header only library and because we shipped it with the project
 # normally you would use find_package(<package_name>) for libraries with actual objects
 set(GLM_INCLUDE_DIRS libs/glm-0.9.7.2)
+set(EXTRA_INCLUDE_DIRS libs/extra)
 
 find_package(SDL2 REQUIRED)
 
-include_directories(${SDL2_INCLUDE_DIRS} ${GLM_INCLUDE_DIRS})
+include_directories(${SDL2_INCLUDE_DIRS} ${GLM_INCLUDE_DIRS} ${EXTRA_INCLUDE_DIRS})
 include_directories(libs/sdw)
 
 add_executable(RedNoise
