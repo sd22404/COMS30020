@@ -6,9 +6,9 @@
 
 
 struct PointLight {
-    glm::vec3 defaultPosition;
-    glm::vec3 position;
-    float intensity;
+    glm::vec3 defaultPosition{};
+    glm::vec3 position{};
+    float intensity{};
 
     PointLight();
     PointLight(float intensity);

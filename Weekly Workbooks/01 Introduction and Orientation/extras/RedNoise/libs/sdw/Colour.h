@@ -7,6 +7,8 @@ struct Colour {
 	int red{};
 	int green{};
 	int blue{};
+	bool mirrored{};
+	bool glassy{};
 	Colour();
 	Colour(int r, int g, int b);
 	Colour(std::string n, int r, int g, int b);

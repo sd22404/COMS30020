@@ -32,8 +32,8 @@ RayTriangleIntersection closestIntersection(std::vector<ModelTriangle> &triangle
 	rayDirection = normalize(rayDirection);
 	float inverseClosestDistance = 0;
 	// initialise empty RayTriangleIntersection
-	RayTriangleIntersection closestIntersection;
-	closestIntersection.triangleIndex = -1;
+	RayTriangleIntersection intersection;
+	intersection.triangleIndex = -1;
 	// for each triangle, check for possible solution to intersection equation
 	for (int i = 0; i < triangles.size(); i++) {
 		ModelTriangle &triangle = triangles[i];
@@ -49,12 +49,20 @@ RayTriangleIntersection closestIntersection(std::vector<ModelTriangle> &triangle
 		float t = possibleSolution.x, u = possibleSolution.y, v = possibleSolution.z;
 		// if closer than previously found solution, and within the bounds of the triangle, set new closest intersection
 		if (t > MIN_INTERSECT_DISTANCE && 1 / t > inverseClosestDistance && u >= 0 && u <= 1.0 && v >= 0 && v <= 1.0 && (u + v) <= 1.0) {
-			closestIntersection = RayTriangleIntersection(startPoint + t * rayDirection, t, triangle, i, {u, v, 1.0f - u - v});
+			intersection = RayTriangleIntersection(startPoint + t * rayDirection, t, triangle, i, {u, v, 1.0f - u - v});
 			inverseClosestDistance = 1 / t;
 		}
 	}
 
-	return closestIntersection;
+	if (intersection.intersectedTriangle.colour.mirrored) {
+		glm::vec3 incidence = rayDirection;
+		glm::vec3 normal = intersection.intersectedTriangle.normal;
+		glm::vec3 start = intersection.intersectionPoint;
+		glm::vec3 reflect = incidence - 2.0f * normal * dot(incidence, normal);
+		return closestIntersection(triangles, start, reflect);
+	}
+
+	return intersection;
 }
 
 glm::vec3 rayFromCanvasPoint(CanvasPoint &canvasPoint, Camera &cam, float canvasScale = HEIGHT / 2.0) {
@@ -507,6 +515,7 @@ void raytrace(std::vector<ModelTriangle> &triangles, std::map<std::string, Textu
 			RayTriangleIntersection surface = closestIntersection(triangles, cam.position, rayDirection);
 			if (surface.triangleIndex != size_t(-1)) {
 				Colour colour = surface.intersectedTriangle.colour;
+				std::cout << (colour.mirrored ? "yes" : "");
 				float brightness = 0.0f;
 				// if textured get colour from texture map
 				if (!surface.intersectedTriangle.texture.empty()) {
@@ -771,6 +780,10 @@ std::pair<std::map<std::string, Colour>, TextureMap> readMtl(const std::string &
 			int g = int(strtod(splitln[2].c_str(), nullptr) * 255);
 			int b = int(strtod(splitln[3].c_str(), nullptr) * 255);
 			palette.insert({name, Colour(name, r, g, b)});
+		}
+		if (splitln[0] == "Ks") {
+			palette.insert({name, Colour(name, 0, 0, 0)});
+			palette[name].mirrored = true;
 		}
 		if (splitln[0] == "map_Kd") {
 			// find texture filename and create TextureMap object

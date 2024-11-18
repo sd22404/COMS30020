@@ -2,10 +2,11 @@
 #include <utility>
 
 Colour::Colour() = default;
-Colour::Colour(int r, int g, int b) : red(r), green(g), blue(b) {}
+Colour::Colour(int r, int g, int b) : red(r), green(g), blue(b), mirrored(false), glassy(false) {}
 Colour::Colour(std::string n, int r, int g, int b) :
 		name(std::move(n)),
-		red(r), green(g), blue(b) {}
+		red(r), green(g), blue(b),
+		mirrored(false), glassy(false) {}
 
 std::ostream &operator<<(std::ostream &os, const Colour &colour) {
 	os << colour.name << " ["

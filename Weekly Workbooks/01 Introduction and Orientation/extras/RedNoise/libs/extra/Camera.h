@@ -6,16 +6,16 @@
 #include <glm/gtx/string_cast.hpp>
 
 struct Camera {
-    glm::vec3 defaultPosition;
-    glm::mat3 defaultRotation;
-    float defaultFocal;
-    glm::vec3 position;
-    glm::mat3 rotation;
-    float focalLength;
-    float moveSpeed;
-    float altMoveSpeed;
-    float lookSpeed;
-    float altLookSpeed;
+    glm::vec3 defaultPosition{};
+    glm::mat3 defaultRotation{};
+    float defaultFocal{};
+    glm::vec3 position{};
+    glm::mat3 rotation{};
+    float focalLength{};
+    float moveSpeed{};
+    float altMoveSpeed{};
+    float lookSpeed{};
+    float altLookSpeed{};
 
     Camera();
     Camera(float focalLength);
