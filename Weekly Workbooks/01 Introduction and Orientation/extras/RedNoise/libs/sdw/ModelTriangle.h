@@ -9,9 +9,9 @@
 
 struct ModelTriangle {
 	std::array<Vertex, 3> vertices{};
-	std::string texture{};
 	Colour colour{};
 	glm::vec3 normal{};
+	std::string texture{};
 
 	Vertex &v0();
 	Vertex &v1();

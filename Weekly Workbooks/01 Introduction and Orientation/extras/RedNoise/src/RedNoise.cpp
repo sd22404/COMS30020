@@ -91,7 +91,7 @@ bool inShadow(std::vector<ModelTriangle> &triangles, glm::vec3 &surface, PointLi
 float proximityLighting(glm::vec3 &point, PointLight &light) {
 	float dist = distance(point, light.position);
 	// + 1 in denominator to avoid infinite brightness at light source
-	float brightness = light.intensity / (4 * M_PIf * dist * dist + 1);
+	float brightness = light.intensity / float(4 * M_PI * dist * dist + 1);
 	return brightness;
 }
 
