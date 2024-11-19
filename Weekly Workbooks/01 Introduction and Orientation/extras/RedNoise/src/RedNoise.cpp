@@ -530,7 +530,7 @@ void raytrace(std::vector<ModelTriangle> &triangles, std::map<std::string, Textu
 				}
 				// calculate brightness (Phong, Gouraud or face-normal techniques) for each light
 				for (PointLight light : lights) {
-					float newBrightness = phongBrightness(surface, light, cam);
+					float newBrightness = gouraudBrightness(surface, light, cam);
 					// if in shadow set brightness to zero
 					if (inShadow(triangles, surface.intersectionPoint, light)) newBrightness = 0;
 					brightness += newBrightness;
@@ -743,13 +743,12 @@ void handleEvent(SDL_Event &event, std::vector<PointLight> &lights, Camera &cam,
 
 glm::vec3 vertexNormal(Vertex &vertex, std::vector<ModelTriangle> &triangles) {
 	// for each vertex on triangles in the model, if it's the same as given vertex, add to list
-	glm::vec3 total; int neighbours = 0;
+	glm::vec3 total;
 	for (auto &triangle : triangles) {
 		for (auto &v : triangle.vertices) {
 			if (v.index == vertex.index) {
 				// sum the normals of neighbouring triangles
 				total += triangle.normal;
-				neighbours++;
 			}
 		}
 	}

@@ -5,7 +5,7 @@
 #include <array>
 #include "Colour.h"
 #include "TexturePoint.h"
-#include "../extra/Vertex.h"
+#include "Vertex.h"
 
 struct ModelTriangle {
 	std::array<Vertex, 3> vertices{};

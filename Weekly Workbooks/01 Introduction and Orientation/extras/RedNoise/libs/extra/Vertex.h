@@ -1,7 +1,7 @@
 #pragma once
 
 #include <ostream>
-#include <TexturePoint.h>
+#include <../sdw/TexturePoint.h>
 #include <glm/detail/type_vec3.hpp>
 #include <glm/gtx/string_cast.hpp>
 
