@@ -11,6 +11,8 @@
 #include <glm/glm.hpp>
 #include <Camera.h>
 #include <PointLight.h>
+#include <Light.h>
+#include <QuadLight.h>
 
 #define WIDTH 640
 #define HEIGHT 480
@@ -35,7 +37,7 @@ RayTriangleIntersection closestIntersection(std::vector<ModelTriangle> &triangle
 	RayTriangleIntersection intersection;
 	intersection.triangleIndex = -1;
 	// for each triangle, check for possible solution to intersection equation
-	for (int i = 0; i < triangles.size(); i++) {
+	for (size_t i = 0; i < triangles.size(); i++) {
 		ModelTriangle &triangle = triangles[i];
 		// calculate edge vectors
 		glm::vec3 e0 = triangle.v1().position - triangle.v0().position;
@@ -77,7 +79,7 @@ glm::vec3 rayFromCanvasPoint(CanvasPoint &canvasPoint, Camera &cam, float canvas
 	return ray;
 }
 
-bool inShadow(std::vector<ModelTriangle> &triangles, glm::vec3 &surface, PointLight &light) {
+bool inShadow(std::vector<ModelTriangle> &triangles, glm::vec3 &surface, Light &light) {
 	// calculate shadowRay direction
 	glm::vec3 shadowRay = light.position - surface;
 	// get the closest intersection of shadowRay from surface
@@ -88,20 +90,20 @@ bool inShadow(std::vector<ModelTriangle> &triangles, glm::vec3 &surface, PointLi
 	return true;
 }
 
-float proximityLighting(glm::vec3 &point, PointLight &light) {
+float proximityLighting(glm::vec3 &point, Light &light) {
 	float dist = distance(point, light.position);
 	// + 1 in denominator to avoid infinite brightness at light source
 	float brightness = light.intensity / float(4 * M_PI * dist * dist + 1);
 	return brightness;
 }
 
-float angularLighting(glm::vec3 &point, glm::vec3 &normal, PointLight &light) {
+float angularLighting(glm::vec3 &point, glm::vec3 &normal, Light &light) {
 	float angle = dot(normal, normalize(light.position - point));
 	float brightness = angle;
 	return brightness;
 }
 
-float specularLighting(glm::vec3 &point, glm::vec3 &normal, PointLight &light, glm::vec3 &camPos, float n = 256) {
+float specularLighting(glm::vec3 &point, glm::vec3 &normal, Light &light, glm::vec3 &camPos, float n = 256) {
 	glm::vec3 view = normalize(camPos - point);
 	glm::vec3 incidence = normalize(point - light.position);
 	glm::vec3 reflection = incidence - 2.0f * normal * dot(incidence, normal);
@@ -110,7 +112,7 @@ float specularLighting(glm::vec3 &point, glm::vec3 &normal, PointLight &light, g
 	return brightness;
 }
 
-float pointBrightness(glm::vec3 &point, glm::vec3 &normal, PointLight &light, Camera &cam) {
+float surfaceBrightness(glm::vec3 &point, glm::vec3 &normal, Light &light, Camera &cam) {
 	// calculate proximity lighting
 	float prox = proximityLighting(point, light);
 	// calculate angle of incidence lighting
@@ -123,23 +125,23 @@ float pointBrightness(glm::vec3 &point, glm::vec3 &normal, PointLight &light, Ca
 	return brightness;
 }
 
-float gouraudBrightness(RayTriangleIntersection &intersection, PointLight &light, Camera &cam) {
+float gouraudBrightness(RayTriangleIntersection &intersection, Light &light, Camera &cam) {
 	glm::vec3 &bCoords = intersection.barycentricPoint;
 	glm::vec3 &v0_norm = intersection.intersectedTriangle.v0().normal;
 	glm::vec3 &v1_norm = intersection.intersectedTriangle.v1().normal;
 	glm::vec3 &v2_norm = intersection.intersectedTriangle.v2().normal;
-	float v0_brightness = pointBrightness(intersection.intersectionPoint, v0_norm, light, cam);
-	float v1_brightness = pointBrightness(intersection.intersectionPoint, v1_norm, light, cam);
-	float v2_brightness = pointBrightness(intersection.intersectionPoint, v2_norm, light, cam);
+	float v0_brightness = surfaceBrightness(intersection.intersectionPoint, v0_norm, light, cam);
+	float v1_brightness = surfaceBrightness(intersection.intersectionPoint, v1_norm, light, cam);
+	float v2_brightness = surfaceBrightness(intersection.intersectionPoint, v2_norm, light, cam);
 	float brightness = bCoords.x * v1_brightness + bCoords.y * v2_brightness + bCoords.z * v0_brightness;
 	return brightness;
 }
 
-float phongBrightness(RayTriangleIntersection &intersection, PointLight &light, Camera &cam) {
+float phongBrightness(RayTriangleIntersection &intersection, Light &light, Camera &cam) {
 	ModelTriangle &triangle = intersection.intersectedTriangle;
 	glm::vec3 &bCoords = intersection.barycentricPoint;
 	glm::vec3 normal = normalize(bCoords.x * triangle.v1().normal + bCoords.y * triangle.v2().normal + bCoords.z * triangle.v0().normal);
-	float brightness = pointBrightness(intersection.intersectionPoint, normal, light, cam);
+	float brightness = surfaceBrightness(intersection.intersectionPoint, normal, light, cam);
 	return brightness;
 }
 
@@ -207,7 +209,7 @@ std::vector<float> interpolateSingleFloats(float from, float to, size_t numberOf
 
 	std::vector<float> result;
 	result.reserve(numberOfValues);
-	for (int i = 0; i < numberOfValues; i++) {
+	for (size_t i = 0; i < numberOfValues; i++) {
 		result.push_back(from + float(i) * step);
 	}
 	return result;
@@ -221,7 +223,7 @@ std::vector<glm::vec3> interpolateThreeElementValues(glm::vec3 from, glm::vec3 t
 
 	std::vector<glm::vec3> result;
 	result.reserve(numberOfValues);
-	for (int i = 0; i < numberOfValues; i++) {
+	for (size_t i = 0; i < numberOfValues; i++) {
 		result.push_back(from + float(i) * step);
 	}
 	return result;
@@ -240,7 +242,7 @@ void drawLine(CanvasPoint &from, CanvasPoint &to, Colour &colour, DrawingWindow 
 	uint32_t packedCol = (255 << 24) + (int(colour.red) << 16) + (int(colour.green) << 8) + int(colour.blue);
 
 	// set pixels based on interpolated values (rounded)
-	for (int i = 0; i < numberOfValues; i++) {
+	for (size_t i = 0; i < numberOfValues; i++) {
 		CanvasPoint point = CanvasPoint(line[i].x, line[i].y, line[i].z);
 		// check point is on screen and not behind camera
 		if (!isOffScreen(point) && point.depth > 0) {
@@ -506,7 +508,7 @@ void raster(std::vector<ModelTriangle> &triangles, std::map<std::string, Texture
 	}
 }
 
-void raytrace(std::vector<ModelTriangle> &triangles, std::map<std::string, TextureMap> &textures, std::vector<PointLight> &lights, Camera &cam, DrawingWindow &window) {
+void raytrace(std::vector<ModelTriangle> &triangles, std::map<std::string, TextureMap> &textures, std::vector<std::reference_wrapper<Light>> &lights, Camera &cam, DrawingWindow &window) {
 	for (int y = 0; y < HEIGHT; y++) {
 		for (int x = 0; x < WIDTH; x++) {
 			// get the closest intersection of a ray through current (x,y) on the image plane
@@ -529,7 +531,7 @@ void raytrace(std::vector<ModelTriangle> &triangles, std::map<std::string, Textu
 					colour = Colour(int(r), int(g), int(b));
 				}
 				// calculate brightness (Phong, Gouraud or face-normal techniques) for each light
-				for (PointLight light : lights) {
+				for (Light light : lights) {
 					float newBrightness = gouraudBrightness(surface, light, cam);
 					// if in shadow set brightness to zero
 					if (inShadow(triangles, surface.intersectionPoint, light)) newBrightness = 0;
@@ -551,8 +553,8 @@ void raytrace(std::vector<ModelTriangle> &triangles, std::map<std::string, Textu
 }
 
 
-void draw(std::vector<ModelTriangle> &triangles, std::map<std::string, TextureMap> &textures, std::vector<PointLight> &lights, Camera &cam, DrawingWindow &window) {
-	PointLight &testLight = lights.at(0);
+void draw(std::vector<ModelTriangle> &triangles, std::map<std::string, TextureMap> &textures, std::vector<std::reference_wrapper<Light>> &lights, Camera &cam, DrawingWindow &window) {
+	Light &testLight = lights.at(0);
 	// create triangle for light source
 	ModelTriangle lightTrig = {
 		{testLight.position.x - 0.025f, testLight.position.y - 0.025f, testLight.position.z},
@@ -591,8 +593,8 @@ void draw(std::vector<ModelTriangle> &triangles, std::map<std::string, TextureMa
 	}
 }
 
-void handleEvent(SDL_Event &event, std::vector<PointLight> &lights, Camera &cam, DrawingWindow &window) {
-	PointLight &testLight = lights.at(0);
+void handleEvent(SDL_Event &event, std::vector<std::reference_wrapper<Light>> &lights, Camera &cam, DrawingWindow &window) {
+	Light &testLight = lights.at(0);
 	if (event.type == SDL_KEYDOWN) {
 		// move left
 		if (event.key.keysym.sym == SDLK_a) {
@@ -834,7 +836,7 @@ std::pair<std::vector<ModelTriangle>, TextureMap> readObj(const std::string &fil
 		if (splitln[0] == "f") {
 			// split line into indices
 			std::vector<std::string> vIndices, tIndices;
-			for (int i = 1; i < splitln.size(); i++) {
+			for (size_t i = 1; i < splitln.size(); i++) {
 				std::vector<std::string> vt = split(splitln[i], '/');
 				vIndices.push_back(vt[0]);
 				tIndices.push_back(vt[1]);
@@ -906,9 +908,13 @@ std::pair<std::vector<ModelTriangle>, TextureMap> readObj(const std::string &fil
 
 	// initialise light source and camera
 	Camera camera = Camera(3.0f);
-	PointLight light = PointLight(25.0f);
+	PointLight light = PointLight();
+	QuadLight ceiling = QuadLight();
 
-	std::vector<PointLight> lights = {light};
+	std::vector<std::reference_wrapper<Light>> lights;
+	lights.emplace_back(ceiling);
+	QuadLight quad = lights.at(0);
+	std::cout << to_string(quad.e1) << std::endl; // doesn't get QuadLight values
 
 	// setup fps counter
 	time_t start = time(nullptr);
