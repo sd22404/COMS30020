@@ -39,8 +39,6 @@ add_executable(RedNoise
         src/RedNoise.cpp
         libs/extra/Vertex.cpp
         libs/extra/Camera.cpp
-        libs/extra/PointLight.cpp
-        libs/extra/QuadLight.cpp
         libs/extra/Light.cpp
         libs/extra/Light.h)
 
