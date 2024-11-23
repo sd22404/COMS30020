@@ -11,6 +11,14 @@ newmtl Grey
 Kd 0.700000 0.700000 0.700000
 map_bump rocky-normal.ppm
 
+newmtl Tiles
+map_Kd ceramic.ppm
+map_bump ceramic-normal.ppm
+
+newmtl Wallpaper
+map_Kd wallpaper.ppm
+map_bump wallpaper-normal.ppm
+
 newmtl Leopard
 map_Kd leopard.ppm
 

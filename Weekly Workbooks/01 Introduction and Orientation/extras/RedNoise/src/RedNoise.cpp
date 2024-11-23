@@ -12,6 +12,7 @@
 #include <Camera.h>
 #include <functional>
 #include <Light.h>
+#include "omp.h"
 
 #define WIDTH 1280
 #define HEIGHT 960
@@ -20,7 +21,7 @@
 #define MIN_INTERSECT_DISTANCE 0.001f
 #define RENDER_TYPES 3
 #define AMBIENT 0.1f
-#define AREA_LIGHT_SAMPLES 2048
+#define AREA_LIGHT_SAMPLES 1024
 #define MIRROR_BOUNCE_CAP 3
 
 const std::string BOX_OBJ = "./assets/cornell-box/cornell-box.obj";
@@ -516,8 +517,9 @@ void raster(std::vector<ModelTriangle> &triangles, std::map<std::string, Texture
 }
 
 void raytrace(std::vector<ModelTriangle> &triangles, std::map<std::string, TextureMap> &textures, std::map<std::string, TextureMap> &normalMaps, std::vector<Light> &lights, Camera &cam, DrawingWindow &window) {
+	omp_set_nested(1);
+	#pragma omp parallel for default(shared) num_threads(6) collapse(2)
 	for (int y = 0; y < HEIGHT; y++) {
-		#pragma omp parallel for
 		for (int x = 0; x < WIDTH; x++) {
 			// get the closest intersection of a ray through current (x,y) on the image plane
 			CanvasPoint canvasPoint = CanvasPoint(float(x), float(y));
@@ -547,15 +549,15 @@ void raytrace(std::vector<ModelTriangle> &triangles, std::map<std::string, Textu
 					uint32_t r = rgb >> 16;
 					uint32_t g = (rgb - (r << 16)) >> 8;
 					uint32_t b = (rgb - (r << 16) - (g << 8));
-					// update normal in triangle
+					// convert from rgb [0 -> 1] to normals [-1 -> 1]
 					triangle.normal = {float(r) / 255.0f * 2.0f - 1.0f, float(g) / 255.0f * 2.0f - 1.0f, float(b) / 255.0f * 2.0f - 1.0f};
 				}
 				// calculate brightness (Phong, Gouraud or face-normal techniques) for each light
 				for (Light light : lights) {
 					float lightBrightness = 0.0f;
-					int s = 0;
-					// sample light at least once, more if area light
-					do {
+					// sample light once if point light, AREA_LIGHT_SAMPLES times if area light
+					#pragma omp parallel for default(none) shared(light, triangle, triangles, surface, cam, brightnessFunction) reduction(+:lightBrightness) num_threads(2)
+					for (int s = 0; s < AREA_LIGHT_SAMPLES; s++) {
 						glm::vec3 lightPoint = light.sample();
 						float sampleBrightness;
 						// if normal mapped, use flat shading not interpolated normals
@@ -564,9 +566,9 @@ void raytrace(std::vector<ModelTriangle> &triangles, std::map<std::string, Textu
 						// if in shadow set brightness to zero
 						if (inShadow(triangles, surface.intersectionPoint, lightPoint)) sampleBrightness = 0;
 						lightBrightness += sampleBrightness;
-						s++;
-					} while (s < AREA_LIGHT_SAMPLES && light.type == AREA);
-					brightness += lightBrightness / float(s);
+						if (light.type != AREA) s = AREA_LIGHT_SAMPLES;
+					}
+					brightness += lightBrightness / float(light.type == AREA ? AREA_LIGHT_SAMPLES : 1.0f);
 				}
 				// clamp between ambient lighting and one
 				brightness = glm::clamp(brightness, AMBIENT, 1.0f);
