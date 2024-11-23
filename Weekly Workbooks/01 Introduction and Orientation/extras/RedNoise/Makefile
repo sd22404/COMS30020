@@ -17,12 +17,12 @@ EXTRA_OBJECT_FILES := $(patsubst $(EXTRA_DIR)%.cpp, $(BUILD_DIR)/%.o, $(EXTRA_SO
 
 # Build settings
 COMPILER := clang++
-COMPILER_OPTIONS := -c -pipe -Wall -std=c++11 # If you have an older compiler, you might have to use -std=c++0x
-DEBUG_OPTIONS := -ggdb -g3
+COMPILER_OPTIONS := -c -pipe -Wall -std=c++11 -fopenmp # If you have an older compiler, you might have to use -std=c++0x
+DEBUG_OPTIONS := -Og -fno-omit-frame-pointer -g
 FUSSY_OPTIONS := -Werror -pedantic
 SANITIZER_OPTIONS := -O1 -fsanitize=undefined -fsanitize=address -fno-omit-frame-pointer
 SPEEDY_OPTIONS := -Ofast -funsafe-math-optimizations -march=native
-LINKER_OPTIONS :=
+LINKER_OPTIONS := -fopenmp
 
 # Set up flags
 SDW_COMPILER_FLAGS := -I$(SDW_DIR)

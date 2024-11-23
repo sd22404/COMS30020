@@ -18,7 +18,7 @@ glm::vec3 Light::sample() {
             }
         case AREA:
             {
-                float u = float(rand() % 101) / 100.0f, v = float(rand() % 101) / 100.0f;
+                float u = float(rand()) / float(RAND_MAX), v = float(rand()) / float(RAND_MAX);
                 sample = position + u * e1 + v * e2;
                 break;
             }

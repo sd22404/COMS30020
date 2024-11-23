@@ -13,26 +13,28 @@
 #include <functional>
 #include <Light.h>
 
-#define WIDTH 640
-#define HEIGHT 480
+#define WIDTH 1280
+#define HEIGHT 960
 
 #define DEG_RAD (2.0f * M_PI / 180.0f)
 #define MIN_INTERSECT_DISTANCE 0.001f
 #define RENDER_TYPES 3
 #define AMBIENT 0.1f
-#define AREA_LIGHT_SAMPLES 1024
+#define AREA_LIGHT_SAMPLES 2048
+#define MIRROR_BOUNCE_CAP 3
 
 const std::string BOX_OBJ = "./assets/cornell-box/cornell-box.obj";
 const std::string SPH_OBJ = "./assets/sphere/sphere.obj";
 const std::string HACK_OBJ = "./assets/hackspace-logo/logo.obj";
 const std::string BUNNY_OBJ = "./assets/bunny/bunny.obj";
+const std::string SCENE_OBJ = "./assets/scene/scene.obj";
 
 bool ORBIT = false;
 int RENDER = 0;
 
 std::function<float(RayTriangleIntersection &surface, glm::vec3 &lightPos, float intensity, Camera &cam)> brightnessFunction;
 
-RayTriangleIntersection closestIntersection(std::vector<ModelTriangle> &triangles, glm::vec3 &startPoint, glm::vec3 &rayDirection) {
+RayTriangleIntersection closestIntersection(std::vector<ModelTriangle> &triangles, glm::vec3 &startPoint, glm::vec3 &rayDirection, int bounces) {
 	// normalise ray direction and initialise closest distance
 	rayDirection = normalize(rayDirection);
 	float inverseClosestDistance = 0;
@@ -59,12 +61,20 @@ RayTriangleIntersection closestIntersection(std::vector<ModelTriangle> &triangle
 		}
 	}
 
-	if (intersection.intersectedTriangle.colour.mirrored) {
+	// bounce again if mirrored surface
+	ModelTriangle &triangle = intersection.intersectedTriangle;
+	if (triangle.colour.mirrored && bounces > 0) {
+		glm::vec3 &bCoords = intersection.barycentricPoint;
 		glm::vec3 incidence = rayDirection;
-		glm::vec3 normal = intersection.intersectedTriangle.normal;
+		// phong normal
+		glm::vec3 normal = normalize(bCoords.x * triangle.v1().normal + bCoords.y * triangle.v2().normal + bCoords.z * triangle.v0().normal);
 		glm::vec3 start = intersection.intersectionPoint;
 		glm::vec3 reflect = incidence - 2.0f * normal * dot(incidence, normal);
-		return closestIntersection(triangles, start, reflect);
+		glm::vec3 perturbation = normalize(glm::vec3(float(rand()) / float(RAND_MAX), float(rand()) / float(RAND_MAX), float(rand()) / float(RAND_MAX)));
+		glm::vec3 scatter = (reflect + triangle.colour.roughness * perturbation);
+		RayTriangleIntersection newIntersection = closestIntersection(triangles, start, scatter, bounces - 1);
+		newIntersection.intersectedTriangle.colour = 255.0f * (((1.0f / 255.0f) * triangle.colour) * ((1.0f / 255.0f) * newIntersection.intersectedTriangle.colour));
+		return newIntersection;
 	}
 
 	return intersection;
@@ -86,7 +96,7 @@ bool inShadow(std::vector<ModelTriangle> &triangles, glm::vec3 &surface, glm::ve
 	// calculate shadowRay direction
 	glm::vec3 shadowRay = lightPos - surface;
 	// get the closest intersection of shadowRay from surface
-	RayTriangleIntersection obstacle = closestIntersection(triangles, surface, shadowRay);
+	RayTriangleIntersection obstacle = closestIntersection(triangles, surface, shadowRay, 0);
 	// if obstacle doesn't exist or is further than light source - no shadow
 	if (obstacle.triangleIndex == size_t(-1)) return false;
 	if (distance(surface, lightPos) < distance(surface, obstacle.intersectionPoint)) return false;
@@ -121,7 +131,7 @@ float surfaceBrightness(glm::vec3 &point, glm::vec3 &normal, glm::vec3 &lightPos
 	// calculate specular lighting
 	float spec = specularLighting(point, normal, lightPos, cam.position);
 
-	float brightness = prox * ang + spec;
+	float brightness = prox * (ang + spec);
 	brightness = glm::clamp(brightness, 0.0f, 1.0f);
 	return brightness;
 }
@@ -347,7 +357,7 @@ void fillHalfTriangle(CanvasPoint &v0, CanvasPoint &v1, CanvasPoint &v3, std::ve
 			// if existing depth is less than current depth, draw pixel and update depth
 			if (!(x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT) && depthBuffer[y][x] < row[j].depth) {
 				if (textured) {
-					packedCol = texture.pixels[int(round(row[j].texturePoint.y * float(texture.height))) * texture.width + int(round(row[j].texturePoint.x * float(texture.width)))];
+					packedCol = texture.pixels[(int(round(row[j].texturePoint.y * float(texture.height))) * texture.width + int(round(row[j].texturePoint.x * float(texture.width)))) % (texture.width * texture.height)];
 				}
 				window.setPixelColour(x, y, packedCol);
 				depthBuffer[y][x] = row[j].depth;
@@ -452,7 +462,7 @@ void interpolationTests() {
 void textureTriangleTest(DrawingWindow &window) {
 	// TEXTURE TRIANGLE TEST
 	std::vector<std::vector<float>> depthBuffer(HEIGHT, std::vector<float>(WIDTH, 0));
-	TextureMap texture = TextureMap("./assets/triangle/texture.ppm");
+	TextureMap texture = TextureMap("./assets/triangle/leopard.ppm");
 	CanvasPoint v0 = CanvasPoint(160, 10, 1);
 	CanvasPoint v1 = CanvasPoint(300, 230, 1);
 	CanvasPoint v2 = CanvasPoint(10, 150, 1);
@@ -478,8 +488,7 @@ void pointCloud(std::vector<ModelTriangle> &triangles, Camera &cam, DrawingWindo
 	}
 }
 
-void wireFrame(std::vector<ModelTriangle> &triangles, Camera &cam, DrawingWindow &window) {
-	Colour colour = Colour(255, 255, 255);
+void wireFrame(std::vector<ModelTriangle> &triangles, Colour colour, Camera &cam, DrawingWindow &window) {
 	for (auto triangle: triangles) {
 		// for each model triangle, project vertices onto canvas and draw resulting triangle
 		CanvasPoint v0 = projectVertexOntoCanvasPoint(triangle.v0().position, cam);
@@ -508,18 +517,20 @@ void raster(std::vector<ModelTriangle> &triangles, std::map<std::string, Texture
 
 void raytrace(std::vector<ModelTriangle> &triangles, std::map<std::string, TextureMap> &textures, std::map<std::string, TextureMap> &normalMaps, std::vector<Light> &lights, Camera &cam, DrawingWindow &window) {
 	for (int y = 0; y < HEIGHT; y++) {
+		#pragma omp parallel for
 		for (int x = 0; x < WIDTH; x++) {
 			// get the closest intersection of a ray through current (x,y) on the image plane
 			CanvasPoint canvasPoint = CanvasPoint(float(x), float(y));
 			glm::vec3 rayDirection = rayFromCanvasPoint(canvasPoint, cam);
-			RayTriangleIntersection surface = closestIntersection(triangles, cam.position, rayDirection);
+			RayTriangleIntersection surface = closestIntersection(triangles, cam.position, rayDirection, MIRROR_BOUNCE_CAP);
+			ModelTriangle &triangle = surface.intersectedTriangle;
 			if (surface.triangleIndex != size_t(-1)) {
-				Colour colour = surface.intersectedTriangle.colour;
+				Colour colour = triangle.colour;
 				float brightness = 0.0f;
 				// if textured get colour from texture map
-				if (!surface.intersectedTriangle.texture.empty()) {
-					TextureMap &texture = textures[surface.intersectedTriangle.texture];
-					TexturePoint texturePoint = barycentricTexturePoint(surface.intersectedTriangle, surface.barycentricPoint);
+				if (!triangle.texture.empty()) {
+					TextureMap &texture = textures[triangle.texture];
+					TexturePoint texturePoint = barycentricTexturePoint(triangle, surface.barycentricPoint);
 					uint32_t packedCol = texture.pixels[(int(round(texturePoint.y * float(texture.height))) * texture.width + int(round(texturePoint.x * float(texture.width)))) % (texture.width * texture.height)];
 					uint32_t rgb = packedCol - (255 << 24);
 					uint32_t r = rgb >> 16;
@@ -528,18 +539,17 @@ void raytrace(std::vector<ModelTriangle> &triangles, std::map<std::string, Textu
 					colour = Colour(int(r), int(g), int(b));
 				}
 				// if normal mapped get normal from map
-				glm::vec3 normal = surface.intersectedTriangle.normal;
-				if (!surface.intersectedTriangle.normalMap.empty()) {
-					TextureMap &normalMap = normalMaps[surface.intersectedTriangle.normalMap];
-					TexturePoint normalPoint = barycentricNormalPoint(surface.intersectedTriangle, surface.barycentricPoint);
+				if (!triangle.normalMap.empty()) {
+					TextureMap &normalMap = normalMaps[triangle.normalMap];
+					TexturePoint normalPoint = barycentricNormalPoint(triangle, surface.barycentricPoint);
 					uint32_t packedCol = normalMap.pixels[(int(round((normalPoint.y * float(normalMap.height))) * float(normalMap.width)) + int(round(normalPoint.x * float(normalMap.width)))) % (normalMap.width * normalMap.height)];
 					uint32_t rgb = packedCol - (255 << 24);
 					uint32_t r = rgb >> 16;
 					uint32_t g = (rgb - (r << 16)) >> 8;
 					uint32_t b = (rgb - (r << 16) - (g << 8));
-					normal = {float(r) / 255.0f * 2.0f - 1.0f, float(g) / 255.0f * 2.0f - 1.0f, float(b) / 255.0f * 2.0f - 1.0f};
+					// update normal in triangle
+					triangle.normal = {float(r) / 255.0f * 2.0f - 1.0f, float(g) / 255.0f * 2.0f - 1.0f, float(b) / 255.0f * 2.0f - 1.0f};
 				}
-				surface.intersectedTriangle.normal = normal;
 				// calculate brightness (Phong, Gouraud or face-normal techniques) for each light
 				for (Light light : lights) {
 					float lightBrightness = 0.0f;
@@ -547,7 +557,10 @@ void raytrace(std::vector<ModelTriangle> &triangles, std::map<std::string, Textu
 					// sample light at least once, more if area light
 					do {
 						glm::vec3 lightPoint = light.sample();
-						float sampleBrightness = brightnessFunction(surface, lightPoint, light.intensity, cam);
+						float sampleBrightness;
+						// if normal mapped, use flat shading not interpolated normals
+						if (triangle.normalMap.empty()) sampleBrightness = brightnessFunction(surface, lightPoint, light.intensity, cam);
+						else sampleBrightness = flatBrightness(surface, lightPoint, light.intensity, cam);
 						// if in shadow set brightness to zero
 						if (inShadow(triangles, surface.intersectionPoint, lightPoint)) sampleBrightness = 0;
 						lightBrightness += sampleBrightness;
@@ -572,6 +585,11 @@ void raytrace(std::vector<ModelTriangle> &triangles, std::map<std::string, Textu
 
 
 void draw(std::vector<ModelTriangle> &triangles, std::map<std::string, TextureMap> &textures, std::map<std::string, TextureMap> &normalMaps, std::vector<Light> &lights, Camera &cam, DrawingWindow &window) {
+	// clear frame before drawing anything new
+	window.clearPixels();
+
+	Colour red = Colour(255, 0, 0);
+	Colour white = Colour(255, 255, 255);
 
 	Light &testLight = lights.at(0);
 	// create triangle for light source
@@ -591,24 +609,21 @@ void draw(std::vector<ModelTriangle> &triangles, std::map<std::string, TextureMa
 	}
 
 	// TO DO: Add keys to switch lighting modes
-	brightnessFunction = flatBrightness;
+	brightnessFunction = phongBrightness;
 
 	switch (RENDER) {
 		case 0:
-			window.clearPixels();
-			wireFrame(triangles, cam, window);
+			wireFrame(triangles, white, cam, window);
 			break;
 		case 1:
-			window.clearPixels();
 			raster(triangles, textures, cam, window);
 			// render triangle where light source is
-			wireFrame(extras, cam, window);
+			wireFrame(extras, red, cam, window);
 			break;
 		case 2:
-			window.clearPixels();
 			raytrace(triangles, textures, normalMaps, lights, cam, window);
 			// render triangle where light source is
-			wireFrame(extras, cam, window);
+			// wireFrame(extras, red, cam, window);
 			break;
 		default:
 			break;
@@ -619,109 +634,49 @@ void handleEvent(SDL_Event &event, std::vector<Light> &lights, Camera &cam, Draw
 	Light &testLight = lights.at(0);
 	if (event.type == SDL_KEYDOWN) {
 		// move left
-		if (event.key.keysym.sym == SDLK_a) {
-			cam.position -= normalize(cam.rotation[0]) * cam.moveSpeed;
-			window.clearPixels();
-		}
+		if (event.key.keysym.sym == SDLK_a) cam.position -= normalize(cam.rotation[0]) * cam.moveSpeed;
 		// move right
-		else if (event.key.keysym.sym == SDLK_d) {
-			cam.position += normalize(cam.rotation[0]) * cam.moveSpeed;
-			window.clearPixels();
-		}
+		else if (event.key.keysym.sym == SDLK_d) cam.position += normalize(cam.rotation[0]) * cam.moveSpeed;
 		// move forwards
-		else if (event.key.keysym.sym == SDLK_w) {
-			cam.position -= normalize(cam.rotation[2]) * cam.moveSpeed;
-			window.clearPixels();
-		}
+		else if (event.key.keysym.sym == SDLK_w) cam.position -= normalize(cam.rotation[2]) * cam.moveSpeed;
 		// move backwards
-		else if (event.key.keysym.sym == SDLK_s) {
-			cam.position += normalize(cam.rotation[2]) * cam.moveSpeed;
-			window.clearPixels();
-		}
+		else if (event.key.keysym.sym == SDLK_s) cam.position += normalize(cam.rotation[2]) * cam.moveSpeed;
 		// move up
-		else if (event.key.keysym.sym == SDLK_r) {
-			cam.position += normalize(cam.rotation[1]) * cam.moveSpeed;
-			window.clearPixels();
-		}
+		else if (event.key.keysym.sym == SDLK_r) cam.position += normalize(cam.rotation[1]) * cam.moveSpeed;
 		// move down
-		else if (event.key.keysym.sym == SDLK_f) {
-			cam.position -= normalize(cam.rotation[1]) * cam.moveSpeed;
-			window.clearPixels();
-		}
+		else if (event.key.keysym.sym == SDLK_f) cam.position -= normalize(cam.rotation[1]) * cam.moveSpeed;
 		// orbit right
-		else if (event.key.keysym.sym == SDLK_e) {
-			cam.position = cam.position * rotateY(DEG_RAD * -cam.lookSpeed);
-			window.clearPixels();
-		}
+		else if (event.key.keysym.sym == SDLK_e) cam.position = cam.position * rotateY(DEG_RAD * -cam.lookSpeed);
 		// orbit left
-		else if (event.key.keysym.sym == SDLK_q) {
-			cam.position = cam.position * rotateY(DEG_RAD * cam.lookSpeed);
-			window.clearPixels();
-		}
+		else if (event.key.keysym.sym == SDLK_q) cam.position = cam.position * rotateY(DEG_RAD * cam.lookSpeed);
 		// look left
-		else if (event.key.keysym.sym == SDLK_LEFT) {
-			cam.rotation = rotateY(DEG_RAD * cam.lookSpeed) * cam.rotation;
-			window.clearPixels();
-		}
+		else if (event.key.keysym.sym == SDLK_LEFT) cam.rotation = rotateY(DEG_RAD * cam.lookSpeed) * cam.rotation;
 		// look right
-		else if (event.key.keysym.sym == SDLK_RIGHT) {
-			cam.rotation = rotateY(DEG_RAD * -cam.lookSpeed) * cam.rotation;
-			window.clearPixels();
-		}
+		else if (event.key.keysym.sym == SDLK_RIGHT) cam.rotation = rotateY(DEG_RAD * -cam.lookSpeed) * cam.rotation;
 		// look up
-		else if (event.key.keysym.sym == SDLK_UP) {
-			cam.rotation = rotateV(cam.rotation[0], DEG_RAD * -cam.lookSpeed) * cam.rotation;
-			window.clearPixels();
-		}
+		else if (event.key.keysym.sym == SDLK_UP) cam.rotation = rotateV(cam.rotation[0], DEG_RAD * -cam.lookSpeed) * cam.rotation;
 		// look down
-		else if (event.key.keysym.sym == SDLK_DOWN) {
-			cam.rotation = rotateV(cam.rotation[0], DEG_RAD * cam.lookSpeed) * cam.rotation;
-			window.clearPixels();
-		}
+		else if (event.key.keysym.sym == SDLK_DOWN) cam.rotation = rotateV(cam.rotation[0], DEG_RAD * cam.lookSpeed) * cam.rotation;
 		// reset position and rotation
-		else if (event.key.keysym.sym == SDLK_SPACE) {
-			cam.position = cam.defaultPosition;
-			cam.rotation = cam.defaultRotation;
-			window.clearPixels();
-		}
+		else if (event.key.keysym.sym == SDLK_SPACE) { cam.position = cam.defaultPosition; cam.rotation = cam.defaultRotation; }
 		// toggle orbit
-		else if (event.key.keysym.sym == SDLK_g) {
-			ORBIT = !ORBIT;
-		}
+		else if (event.key.keysym.sym == SDLK_LCTRL) ORBIT = !ORBIT;
 		// look at origin
-		else if (event.key.keysym.sym == SDLK_t) {
-			glm::vec3 target = {0, 0, 0};
-			lookAt(target, cam);
-			window.clearPixels();
-		}
+		else if (event.key.keysym.sym == SDLK_t) { glm::vec3 target = {0, 0, 0}; lookAt(target, cam); }
 		// move light forward
-		else if (event.key.keysym.sym == SDLK_i) {
-			testLight.position += glm::vec3(0, 0, -1) * cam.moveSpeed;
-		}
+		else if (event.key.keysym.sym == SDLK_i) testLight.position += glm::vec3(0, 0, -1) * cam.moveSpeed;
 		// move light backward
-		else if (event.key.keysym.sym == SDLK_k) {
-			testLight.position += glm::vec3(0, 0, 1) * cam.moveSpeed;
-		}
+		else if (event.key.keysym.sym == SDLK_k) testLight.position += glm::vec3(0, 0, 1) * cam.moveSpeed;
 		// move light left
-		else if (event.key.keysym.sym == SDLK_j) {
-			testLight.position += glm::vec3(-1, 0, 0) * cam.moveSpeed;
-		}
+		else if (event.key.keysym.sym == SDLK_j) testLight.position += glm::vec3(-1, 0, 0) * cam.moveSpeed;
 		// move light right
-		else if (event.key.keysym.sym == SDLK_l) {
-			testLight.position += glm::vec3(1, 0, 0) * cam.moveSpeed;
-		}
+		else if (event.key.keysym.sym == SDLK_l) testLight.position += glm::vec3(1, 0, 0) * cam.moveSpeed;
 		// move light down
-		else if (event.key.keysym.sym == SDLK_o) {
-			testLight.position += glm::vec3(0, -1, 0) * cam.moveSpeed;
-		}
+		else if (event.key.keysym.sym == SDLK_o) testLight.position += glm::vec3(0, -1, 0) * cam.moveSpeed;
 		// move light up
-		else if (event.key.keysym.sym == SDLK_p) {
-			testLight.position += glm::vec3(0, 1, 0) * cam.moveSpeed;
-		}
+		else if (event.key.keysym.sym == SDLK_p) testLight.position += glm::vec3(0, 1, 0) * cam.moveSpeed;
 		// reset light position
-		else if (event.key.keysym.sym == SDLK_u) {
-			testLight.position = testLight.defaultPosition;
-		}
+		else if (event.key.keysym.sym == SDLK_u) testLight.position = testLight.defaultPosition;
 		// toggle fast movement
 		else if (event.key.keysym.sym == SDLK_LSHIFT) {
 			float oldSpeed = cam.moveSpeed;
@@ -732,12 +687,12 @@ void handleEvent(SDL_Event &event, std::vector<Light> &lights, Camera &cam, Draw
 			cam.lookSpeed = cam.altLookSpeed;
 			cam.altLookSpeed = oldSpeed;
 		}
-		// rotate through render modes
-		else if (event.key.keysym.sym == SDLK_LCTRL) {
-			RENDER++;
-			RENDER %= (RENDER_TYPES);
-		}
-		// unfilled triangle
+		// switch render mode
+		else if (event.key.keysym.sym == SDLK_1) RENDER = 0;
+		else if (event.key.keysym.sym == SDLK_2) RENDER = 1;
+		else if (event.key.keysym.sym == SDLK_3) RENDER = 2;
+
+		/* unfilled triangle
 		else if (event.key.keysym.sym == SDLK_h) {
 			Colour colour = Colour(rand() % 255, rand() % 255, rand() % 255);
 			CanvasTriangle canvasTriangle = CanvasTriangle(
@@ -758,6 +713,7 @@ void handleEvent(SDL_Event &event, std::vector<Light> &lights, Camera &cam, Draw
 			fillTriangle(canvasTriangle, depthBuffer, window, colour);
 			drawTriangle(canvasTriangle, white, window);
 		}
+		*/
 	} else if (event.type == SDL_MOUSEBUTTONDOWN) {
 		window.savePPM("output.ppm");
 		window.saveBMP("output.bmp");
@@ -807,8 +763,10 @@ std::tuple<std::map<std::string, Colour>, std::map<std::string, TextureMap>, std
 		if (splitln[0] == "Ks") {
 			palette.insert({name, Colour(name, 0, 0, 0)});
 			palette[name].mirrored = true;
+			palette[name].roughness = 1.0f - strtof(splitln[1].c_str(), nullptr);
 		}
 		if (splitln[0] == "map_Kd") {
+			palette.insert({name, Colour(name, 0, 0, 0)});
 			// find texture filename and create TextureMap object
 			size_t parent = filename.find_last_of('/');
 			std::string texFile = filename.substr(0, parent + 1) + splitln[1];
@@ -816,6 +774,8 @@ std::tuple<std::map<std::string, Colour>, std::map<std::string, TextureMap>, std
 			textures.insert({name, texture});
 		}
 		if (splitln[0] == "map_bump") {
+			palette.insert({name, Colour(name, 0, 0, 0)});
+			// find texture filename and create TextureMap object
 			size_t parent = filename.find_last_of('/');
 			std::string texFile = filename.substr(0, parent + 1) + splitln[1];
 			TextureMap normal = TextureMap(texFile);
@@ -877,20 +837,20 @@ std::tuple<std::vector<ModelTriangle>, std::map<std::string, TextureMap>, std::m
 			for (size_t i = 1; i < splitln.size(); i++) {
 				std::vector<std::string> vt = split(splitln[i], '/');
 				vIndices.push_back(vt[0]);
-				tIndices.push_back(vt[1]);
+				if (vt.size() > 1) tIndices.push_back(vt[1]);
 			}
-			// convert indices to ints and convert to zero-index (ignoring first char 'f')
+			// convert indices to ints and zero-index (ignoring first char 'f')
 			int iv0 = int(strtol(vIndices[0].c_str(), nullptr, 10) - 1);
 			int iv1 = int(strtol(vIndices[1].c_str(), nullptr, 10) - 1);
 			int iv2 = int(strtol(vIndices[2].c_str(), nullptr, 10) - 1);
-			int it0 = int(strtol(tIndices[0].c_str(), nullptr, 10) - 1);
-			int it1 = int(strtol(tIndices[1].c_str(), nullptr, 10) - 1);
-			int it2 = int(strtol(tIndices[2].c_str(), nullptr, 10) - 1);
 			// set vertices and their indices
 			Vertex v0 = Vertex(vertices[iv0]), v1 = Vertex(vertices[iv1]), v2 = Vertex(vertices[iv2]);
 			v0.index = iv0; v1.index = iv1; v2.index = iv2;
 			// set texture points if used
-			if(it0 != -1 && it1 != -1 && it2 != -1) {
+			if (tIndices.size() > 0) {
+				int it0 = int(strtol(tIndices[0].c_str(), nullptr, 10) - 1);
+				int it1 = int(strtol(tIndices[1].c_str(), nullptr, 10) - 1);
+				int it2 = int(strtol(tIndices[2].c_str(), nullptr, 10) - 1);
 				TexturePoint t0 = texturePoints[it0], t1 = texturePoints[it1], t2 = texturePoints[it2];
 				v0.texturePoint = t0; v1.texturePoint = t1; v2.texturePoint = t2;
 			}
@@ -905,8 +865,8 @@ std::tuple<std::vector<ModelTriangle>, std::map<std::string, TextureMap>, std::m
 			// create new triangle
 			ModelTriangle modelTriangle = {v0, v1, v2, trigColour};
 			modelTriangle.normal = normal;
-			modelTriangle.texture = texture.name;
-			modelTriangle.normalMap = normalMap.name;
+			modelTriangle.texture = texture.name.empty() ? "" : trigColour.name;
+			modelTriangle.normalMap = normalMap.name.empty() ? "" : trigColour.name;
 
 			// add triangle
 			triangles.emplace_back(modelTriangle);
@@ -918,14 +878,6 @@ std::tuple<std::vector<ModelTriangle>, std::map<std::string, TextureMap>, std::m
 		for (auto &v : triangle.vertices) {
 			v.normal = vertexNormal(v, triangles);
 		}
-	}
-
-	// re-key textures by the texture name
-	for (auto t : textures) {
-		if (textures.insert({t.second.name, t.second}).second) textures.erase(t.first);
-	}
-	for (auto n : normalMaps) {
-		if (normalMaps.insert({n.second.name, n.second}).second) normalMaps.erase(n.first);
 	}
 
 	return {triangles, textures, normalMaps};
@@ -944,29 +896,36 @@ std::tuple<std::vector<ModelTriangle>, std::map<std::string, TextureMap>, std::m
 	std::vector<ModelTriangle> triangles;
 	std::map<std::string, TextureMap> textures, normalMaps;
 
-	// read obj files
-	std::tuple<std::vector<ModelTriangle>, std::map<std::string, TextureMap>, std::map<std::string, TextureMap>> cornellBox = readObj(BOX_OBJ);
-	std::map<std::string, TextureMap> boxNormal = std::get<2>(cornellBox);
-	std::vector<ModelTriangle> box = std::get<0>(cornellBox);
+	// read obj and mtl files and store
+	auto scene = readObj(SCENE_OBJ);
+	triangles.insert(triangles.end(), std::get<0>(scene).begin(), std::get<0>(scene).end());
+	textures.insert(std::get<1>(scene).begin(), std::get<1>(scene).end());
+	normalMaps.insert(std::get<2>(scene).begin(), std::get<2>(scene).end());
+
+	/* read obj files
 	std::vector<ModelTriangle> sphere = std::get<0>(readObj(SPH_OBJ));
 	std::vector<ModelTriangle> bunny = std::get<0>(readObj(BUNNY_OBJ));
-	std::tuple<std::vector<ModelTriangle>, std::map<std::string, TextureMap>, std::map<std::string, TextureMap>> hackspace = readObj(HACK_OBJ, 0.001f);
+	std::tuple<std::vector<ModelTriangle>, std::map<std::string, TextureMap>, std::map<std::string, TextureMap>> cornellBox = readObj(BOX_OBJ);
+	std::tuple<std::vector<ModelTriangle>, std::map<std::string, TextureMap>, std::map<std::string, TextureMap>> hackspace = readObj(HACK_OBJ, 0.002f);
+	std::vector<ModelTriangle> box = std::get<0>(cornellBox);
 	std::vector<ModelTriangle> hackspaceLogo = std::get<0>(hackspace);
 
 	// insert obj triangles into vector of all triangles (if needed)
 	triangles.insert(triangles.end(), box.begin(), box.end());
-	//triangles.insert(triangles.end(), sphere.begin(), sphere.end());
+	triangles.insert(triangles.end(), sphere.begin(), sphere.end());
 	triangles.insert(triangles.end(), hackspaceLogo.begin(), hackspaceLogo.end());
 	triangles.insert(triangles.end(), bunny.begin(), bunny.end());
 
 	// insert obj textures into map of all textures
 	textures.insert(std::get<1>(hackspace).begin(), std::get<1>(hackspace).end());
+	textures.insert(std::get<1>(cornellBox).begin(), std::get<1>(cornellBox).end());
 
 	// insert obj normals into map of all normals
-	normalMaps.insert(boxNormal.begin(), boxNormal.end());
+	normalMaps.insert(std::get<2>(cornellBox).begin(), std::get<2>(cornellBox).end());
+	*/
 
 	// initialise lights and camera
-	Camera camera = Camera(3.0f);
+	Camera camera = Camera();
 	Light ceiling = Light(AREA, 25.0f);
 	Light pointLight = Light(POINT, glm::vec3(0, 0.9, 0), 25.0f);
 
