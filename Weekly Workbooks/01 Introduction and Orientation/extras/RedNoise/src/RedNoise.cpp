@@ -19,8 +19,8 @@
 #define DEG_RAD (2.0f * M_PI / 180.0f)
 #define MIN_INTERSECT_DISTANCE 0.001f
 #define RENDER_TYPES 3
-#define AMBIENT 0.2f
-#define AREA_LIGHT_SAMPLES 16
+#define AMBIENT 0.1f
+#define AREA_LIGHT_SAMPLES 1024
 
 const std::string BOX_OBJ = "./assets/cornell-box/cornell-box.obj";
 const std::string SPH_OBJ = "./assets/sphere/sphere.obj";
@@ -95,14 +95,13 @@ bool inShadow(std::vector<ModelTriangle> &triangles, glm::vec3 &surface, glm::ve
 
 float proximityLighting(glm::vec3 &point, glm::vec3 &lightPos, float intensity) {
 	float dist = distance(point, lightPos);
-	// + 1 in denominator to avoid infinite brightness at light source
-	float brightness = intensity / float(4 * M_PI * dist * dist + 1);
+	// + intensity in denominator to avoid infinite brightness at light source
+	float brightness = intensity / float(4 * M_PI * dist * dist + 5);
 	return brightness;
 }
 
 float angularLighting(glm::vec3 &point, glm::vec3 &normal, glm::vec3 &lightPos) {
-	float angle = dot(normal, normalize(lightPos - point));
-	float brightness = angle;
+	float brightness = dot(normal, normalize(lightPos - point));
 	return brightness;
 }
 
@@ -110,8 +109,7 @@ float specularLighting(glm::vec3 &point, glm::vec3 &normal, glm::vec3 &lightPos,
 	glm::vec3 view = normalize(camPos - point);
 	glm::vec3 incidence = normalize(point - lightPos);
 	glm::vec3 reflection = incidence - 2.0f * normal * dot(incidence, normal);
-	float brightness = pow(dot(reflection, view), n);
-	brightness = glm::max(brightness, 0.0f);
+	float brightness = pow(glm::max(dot(reflection, view), 0.0f), n);
 	return brightness;
 }
 
@@ -148,10 +146,19 @@ float phongBrightness(RayTriangleIntersection &intersection, glm::vec3 &lightPos
 	return brightness;
 }
 
+float flatBrightness(RayTriangleIntersection &intersection, glm::vec3 &lightPos, float intensity, Camera &cam) {
+	return surfaceBrightness(intersection.intersectionPoint, intersection.intersectedTriangle.normal, lightPos, intensity, cam);
+}
 
-TexturePoint interpolateTexturePoint(ModelTriangle &triangle, glm::vec3 &bCoords) {
+
+TexturePoint barycentricTexturePoint(ModelTriangle &triangle, glm::vec3 &bCoords) {
 	TexturePoint tp = bCoords.x * triangle.v1().texturePoint + bCoords.y * triangle.v2().texturePoint + bCoords.z * triangle.v0().texturePoint;
 	return tp;
+}
+
+TexturePoint barycentricNormalPoint(ModelTriangle &triangle, glm::vec3 &bCoords) {
+	TexturePoint np = bCoords.x * triangle.v1().normalPoint + bCoords.y * triangle.v2().normalPoint + bCoords.z * triangle.v0().normalPoint;
+	return np;
 }
 
 
@@ -218,6 +225,39 @@ std::vector<float> interpolateSingleFloats(float from, float to, size_t numberOf
 	return result;
 }
 
+std::vector<TexturePoint> interpolateTexturePoints(TexturePoint from, TexturePoint to, size_t numberOfValues) {
+	// if one or fewer values, return only the start point (as it will be the same as the end point)
+	if (numberOfValues < 2) return std::vector<TexturePoint>({from});
+	TexturePoint interval = {to.x - from.x, to.y - from.y};
+	float stepX = interval.x / float(numberOfValues - 1);
+	float stepY = interval.y / float(numberOfValues - 1);
+
+	std::vector<TexturePoint> result;
+	for (size_t i = 0; i < numberOfValues; i++) {
+		TexturePoint point = {from.x + float(i) * stepX, from.y + float(i) * stepY};
+		result.push_back(point);
+	}
+	return result;
+}
+
+std::vector<CanvasPoint> interpolateCanvasPoints(CanvasPoint from, CanvasPoint to, size_t numberOfValues) {
+	// if one or fewer values, return only the start point (as it will be the same as the end point)
+	if (numberOfValues < 2) return std::vector<CanvasPoint>({from});
+	CanvasPoint interval = {to.x - from.x, to.y - from.y, to.depth - from.depth};
+	float stepX = interval.x / float(numberOfValues - 1);
+	float stepY = interval.y / float(numberOfValues - 1);
+	float stepD = interval.depth / float(numberOfValues - 1);
+
+	std::vector<TexturePoint> tps = interpolateTexturePoints(from.texturePoint, to.texturePoint, numberOfValues);
+	std::vector<CanvasPoint> result;
+	for (size_t i = 0; i < numberOfValues; i++) {
+		CanvasPoint point = {from.x + float(i) * stepX, from.y + float(i) * stepY, from.depth + float(i) * stepD};
+		point.texturePoint = tps[i];
+		result.push_back(point);
+	}
+	return result;
+}
+
 std::vector<glm::vec3> interpolateThreeElementValues(glm::vec3 from, glm::vec3 to, size_t numberOfValues) {
 	// if one or fewer values, return only the start point (as it will be the same as the end point)
 	if (numberOfValues < 2) return std::vector<glm::vec3>({from});
@@ -240,15 +280,15 @@ void drawLine(CanvasPoint &from, CanvasPoint &to, Colour &colour, DrawingWindow 
 	// number of steps is one more than the maximum difference in x- or y-direction
 	int numberOfValues = ceil(glm::max(abs(to.x - from.x), abs(to.y - from.y)) + 1);
 	// interp along x and y, store in vector
-	std::vector<glm::vec3> line = interpolateThreeElementValues(glm::vec3(from.x, from.y, from.depth), glm::vec3(to.x, to.y, to.depth), numberOfValues);
+	std::vector<CanvasPoint> line = interpolateCanvasPoints(from, to, numberOfValues);
 	// pack colour
 	uint32_t packedCol = (255 << 24) + (int(colour.red) << 16) + (int(colour.green) << 8) + int(colour.blue);
 
 	// set pixels based on interpolated values (rounded)
 	for (int i = 0; i < numberOfValues; i++) {
-		CanvasPoint point = CanvasPoint(line[i].x, line[i].y, line[i].z);
-		// check point is on screen and not behind camera
-		if (!isOffScreen(point) && point.depth > 0) {
+		CanvasPoint point = CanvasPoint(line[i].x, line[i].y, line[i].depth);
+		// check point is on screen
+		if (!isOffScreen(point)) {
 			window.setPixelColour(floor(point.x), floor(point.y), packedCol);
 		}
 	}
@@ -268,94 +308,49 @@ void drawTriangle(CanvasTriangle &triangle, Colour &colour, DrawingWindow &windo
 CanvasPoint extraVertex(CanvasTriangle &triangle) {
 	// get proportion of total height for middle vertex
 	float yProp = (triangle.v1().y - triangle.v0().y) / (triangle.v2().y - triangle.v0().y);
-	// interpolate Xs along desired edge and get x value that is 'y proportion' of the way along
-	std::vector<float> edgeXs = interpolateSingleFloats(triangle.v0().x, triangle.v2().x, size_t(triangle.v2().y - triangle.v0().y + 1));
-	float v3_x = edgeXs[ceil(yProp * float(edgeXs.size() - 1))];
-	// calculate v3 depth
-	std::vector<float> edgeDepth = interpolateSingleFloats(triangle.v0().depth, triangle.v2().depth, size_t(triangle.v2().y - triangle.v0().y + 1));
-	float v3_depth = edgeDepth[ceil(yProp * float(edgeDepth.size() - 1))];
-	// calculate v3 texture point
-	std::vector<glm::vec3> edgeTexture = interpolateThreeElementValues(
-		glm::vec3(triangle.v0().texturePoint.x, triangle.v0().texturePoint.y, 0),
-		glm::vec3(triangle.v2().texturePoint.x, triangle.v2().texturePoint.y, 0),
-		size_t(triangle.v2().y - triangle.v0().y + 1));
-	glm::vec3 v3_texture = edgeTexture[ceil(yProp * float(edgeDepth.size() - 1))];
 
-	CanvasPoint v3 = CanvasPoint(v3_x, triangle.v1().y, v3_depth);
-	v3.texturePoint = TexturePoint(v3_texture.x, v3_texture.y);
+	// get x-value and depth that are y-proportion of the way along the long edge
+	float v3_x = triangle.v0().x + yProp * (triangle.v2().x - triangle.v0().x);
+	float v3_y = triangle.v1().y;
+	float v3_depth = triangle.v0().depth + yProp * (triangle.v2().depth - triangle.v0().depth);
+
+	// calculate v3 texture point
+	float v3_tx = triangle.v0().texturePoint.x + yProp * (triangle.v2().texturePoint.x - triangle.v0().texturePoint.x);
+	float v3_ty = triangle.v0().texturePoint.y + yProp * (triangle.v2().texturePoint.y - triangle.v0().texturePoint.y);
+	TexturePoint v3_texture = {v3_tx, v3_ty};
+
+	CanvasPoint v3 = CanvasPoint(v3_x, v3_y, v3_depth);
+	v3.texturePoint = v3_texture;
 	return v3;
 }
 
-void fillHalfTriangle(bool top, CanvasPoint &v0, CanvasPoint &v1, CanvasPoint &v2, CanvasPoint &v3, std::vector<std::vector<float>> &depthBuffer, DrawingWindow &window, const Colour &colour = Colour(), const TextureMap &texture = TextureMap()) {
+void fillHalfTriangle(CanvasPoint &v0, CanvasPoint &v1, CanvasPoint &v3, std::vector<std::vector<float>> &depthBuffer, DrawingWindow &window, const Colour &colour = Colour(), const TextureMap &texture = TextureMap()) {
 	bool textured = !texture.name.empty();
-	int minY, minX, maxY, maxX;
-	std::vector<float> upperBound, lowerBound, rightDepth, leftDepth, rowDepth;
-	std::vector<glm::vec3> rightTexture, leftTexture, rowTexture;
 	// pack colour
 	uint32_t packedCol = (255 << 24) + (colour.red << 16) + (colour.green << 8) + colour.blue;
 
-	if (top) {
-		// interpolate along top edges to get x-boundaries and depth values
-		minY = floor(v0.y);
-		maxY = ceil(v1.y);
-		minX = floor(glm::min(v1.x, v0.x));
-		maxX = ceil(glm::max(v3.x, v0.x));
-		upperBound = interpolateSingleFloats(v0.x, v3.x, maxY - minY + 1);
-		lowerBound = interpolateSingleFloats(v0.x, v1.x, maxY - minY + 1);
-		rightDepth = interpolateSingleFloats(v0.depth, v3.depth, maxY - minY + 1);
-		leftDepth = interpolateSingleFloats(v0.depth, v1.depth, maxY - minY + 1);
-		if (textured) {
-			rightTexture = interpolateThreeElementValues(
-				glm::vec3(v0.texturePoint.x, v0.texturePoint.y, 0),
-				glm::vec3(v3.texturePoint.x, v3.texturePoint.y, 0),
-				maxY - minY + 1);
-			leftTexture = interpolateThreeElementValues(
-				glm::vec3(v0.texturePoint.x, v0.texturePoint.y, 0),
-				glm::vec3(v1.texturePoint.x, v1.texturePoint.y, 0),
-				maxY - minY + 1);
-		}
-	} else {
-		// interpolate along bottom edges to get x-boundaries and depth values
-		minY = floor(v1.y);
-		maxY = ceil(v2.y);
-		minX = floor(glm::min(v1.x, v2.x));
-		maxX = ceil(glm::max(v3.x, v2.x));
-		upperBound = interpolateSingleFloats(v3.x, v2.x, maxY - minY + 1);
-		lowerBound = interpolateSingleFloats(v1.x, v2.x, maxY - minY + 1);
-		rightDepth = interpolateSingleFloats(v3.depth, v2.depth, maxY - minY + 1);
-		leftDepth = interpolateSingleFloats(v1.depth, v2.depth, maxY - minY + 1);
-		if (textured) {
-			rightTexture = interpolateThreeElementValues(
-				glm::vec3(v3.texturePoint.x, v3.texturePoint.y, 0),
-				glm::vec3(v2.texturePoint.x, v2.texturePoint.y, 0),
-				maxY - minY + 1);
-			leftTexture = interpolateThreeElementValues(
-				glm::vec3(v1.texturePoint.x, v1.texturePoint.y, 0),
-				glm::vec3(v2.texturePoint.x, v2.texturePoint.y, 0),
-				maxY - minY + 1);
-		}
-	}
+	// interpolate between top and middle vertices to get left and right edges
+	int minY = int(round(v0.y));
+	int maxY = int(round(v1.y));
+	std::vector<CanvasPoint> right = interpolateCanvasPoints(v0, v3, abs(maxY - minY) + 2);
+	std::vector<CanvasPoint> left = interpolateCanvasPoints(v0, v1, abs(maxY - minY) + 2);
+	std::vector<CanvasPoint> row;
 
 	// fill desired pixels
-	for (int y = minY; y < maxY; y++) {
-		// check if within screen height
-		if (!(y < 0 || y >= HEIGHT)) {
-			// interpolate between left and right edges to get pixel depths
-			rowDepth = interpolateSingleFloats(leftDepth[y - minY], rightDepth[y - minY], ceil(upperBound[y - minY] - lowerBound[y - minY] + 1));
-			if (textured) rowTexture = interpolateThreeElementValues(leftTexture[y - minY], rightTexture[y - minY], ceil(upperBound[y - minY] - lowerBound[y - minY] + 1));
-			for (int x = minX; x < maxX; x++) {
-				// if within triangle range and screen range
-				if (float(x) >= lowerBound[y - minY] && float(x) <= upperBound[y - minY] && !(x < 0 || x >= WIDTH)) {
-					// if existing depth is less than current depth, draw pixel and update depth
-					if (depthBuffer.at(y).at(x) < rowDepth[x - int(ceil(lowerBound[y - minY]))]) {
-						if (textured) {
-							glm::vec3 texturePoint = rowTexture[x - int(ceil(lowerBound[y - minY]))];
-							packedCol = texture.pixels[int(round(texturePoint.y * float(texture.height))) * texture.width + int(round(texturePoint.x * float(texture.width)))];
-						}
-						window.setPixelColour(x, y, packedCol);
-						depthBuffer.at(y).at(x) = rowDepth[x - int(ceil(lowerBound[y - minY]))];
-					}
+	for (int i = 0; i < left.size(); i++) {
+		size_t rowLength = size_t(abs(right[i].x - left[i].x)) + 2;
+		// interpolate between left and right edges to get canvas points
+		row = interpolateCanvasPoints(left[i], right[i], rowLength);
+		for (int j = 0; j < rowLength; j++) {
+			int x = int(round(row[j].x)), y = int(round(row[j].y));
+			// if within triangle range and screen range
+			// if existing depth is less than current depth, draw pixel and update depth
+			if (!(x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT) && depthBuffer[y][x] < row[j].depth) {
+				if (textured) {
+					packedCol = texture.pixels[int(round(row[j].texturePoint.y * float(texture.height))) * texture.width + int(round(row[j].texturePoint.x * float(texture.width)))];
 				}
+				window.setPixelColour(x, y, packedCol);
+				depthBuffer[y][x] = row[j].depth;
 			}
 		}
 	}
@@ -385,10 +380,10 @@ void fillTriangle(CanvasTriangle &triangle, std::vector<std::vector<float>> &dep
 	else {v1 = triangle.v1(); v3 = triangle_v3;}
 
 	// FILL TOP HALF
-	fillHalfTriangle(true, v0, v1, v2, v3, depthBuffer, window, colour, textureMap);
+	fillHalfTriangle(v0, v1, v3, depthBuffer, window, colour, textureMap);
 
 	// FILL BOTTOM HALF
-	fillHalfTriangle(false, v0, v1, v2, v3, depthBuffer, window, colour, textureMap);
+	fillHalfTriangle(v2, v1, v3, depthBuffer, window, colour, textureMap);
 }
 
 
@@ -511,7 +506,7 @@ void raster(std::vector<ModelTriangle> &triangles, std::map<std::string, Texture
 	}
 }
 
-void raytrace(std::vector<ModelTriangle> &triangles, std::map<std::string, TextureMap> &textures, std::vector<Light> &lights, Camera &cam, DrawingWindow &window) {
+void raytrace(std::vector<ModelTriangle> &triangles, std::map<std::string, TextureMap> &textures, std::map<std::string, TextureMap> &normalMaps, std::vector<Light> &lights, Camera &cam, DrawingWindow &window) {
 	for (int y = 0; y < HEIGHT; y++) {
 		for (int x = 0; x < WIDTH; x++) {
 			// get the closest intersection of a ray through current (x,y) on the image plane
@@ -524,18 +519,32 @@ void raytrace(std::vector<ModelTriangle> &triangles, std::map<std::string, Textu
 				// if textured get colour from texture map
 				if (!surface.intersectedTriangle.texture.empty()) {
 					TextureMap &texture = textures[surface.intersectedTriangle.texture];
-					TexturePoint texturePoint = interpolateTexturePoint(surface.intersectedTriangle, surface.barycentricPoint);
-					uint32_t packedCol = texture.pixels[int(round(texturePoint.y * float(texture.height))) * texture.width + int(round(texturePoint.x * float(texture.width)))];
+					TexturePoint texturePoint = barycentricTexturePoint(surface.intersectedTriangle, surface.barycentricPoint);
+					uint32_t packedCol = texture.pixels[(int(round(texturePoint.y * float(texture.height))) * texture.width + int(round(texturePoint.x * float(texture.width)))) % (texture.width * texture.height)];
 					uint32_t rgb = packedCol - (255 << 24);
 					uint32_t r = rgb >> 16;
 					uint32_t g = (rgb - (r << 16)) >> 8;
 					uint32_t b = (rgb - (r << 16) - (g << 8));
 					colour = Colour(int(r), int(g), int(b));
 				}
+				// if normal mapped get normal from map
+				glm::vec3 normal = surface.intersectedTriangle.normal;
+				if (!surface.intersectedTriangle.normalMap.empty()) {
+					TextureMap &normalMap = normalMaps[surface.intersectedTriangle.normalMap];
+					TexturePoint normalPoint = barycentricNormalPoint(surface.intersectedTriangle, surface.barycentricPoint);
+					uint32_t packedCol = normalMap.pixels[(int(round((normalPoint.y * float(normalMap.height))) * float(normalMap.width)) + int(round(normalPoint.x * float(normalMap.width)))) % (normalMap.width * normalMap.height)];
+					uint32_t rgb = packedCol - (255 << 24);
+					uint32_t r = rgb >> 16;
+					uint32_t g = (rgb - (r << 16)) >> 8;
+					uint32_t b = (rgb - (r << 16) - (g << 8));
+					normal = {float(r) / 255.0f * 2.0f - 1.0f, float(g) / 255.0f * 2.0f - 1.0f, float(b) / 255.0f * 2.0f - 1.0f};
+				}
+				surface.intersectedTriangle.normal = normal;
 				// calculate brightness (Phong, Gouraud or face-normal techniques) for each light
 				for (Light light : lights) {
 					float lightBrightness = 0.0f;
 					int s = 0;
+					// sample light at least once, more if area light
 					do {
 						glm::vec3 lightPoint = light.sample();
 						float sampleBrightness = brightnessFunction(surface, lightPoint, light.intensity, cam);
@@ -562,18 +571,18 @@ void raytrace(std::vector<ModelTriangle> &triangles, std::map<std::string, Textu
 }
 
 
-void draw(std::vector<ModelTriangle> &triangles, std::map<std::string, TextureMap> &textures, std::vector<Light> &lights, Camera &cam, DrawingWindow &window) {
-/*
+void draw(std::vector<ModelTriangle> &triangles, std::map<std::string, TextureMap> &textures, std::map<std::string, TextureMap> &normalMaps, std::vector<Light> &lights, Camera &cam, DrawingWindow &window) {
+
 	Light &testLight = lights.at(0);
 	// create triangle for light source
 	ModelTriangle lightTrig = {
 		{testLight.position.x - 0.025f, testLight.position.y - 0.025f, testLight.position.z},
 		{testLight.position.x + 0.025f, testLight.position.y - 0.025f, testLight.position.z},
 		{testLight.position.x, testLight.position.y + 0.025f, testLight.position.z},
-		Colour(255, 255, 255)
+		Colour(255, 0, 0)
 	};
 	std::vector<ModelTriangle> extras = {lightTrig};
-*/
+
 	if (ORBIT) {
 		cam.position = cam.position * rotateY(DEG_RAD * cam.lookSpeed);
 		glm::vec3 target = {0, 0, 0};
@@ -581,7 +590,8 @@ void draw(std::vector<ModelTriangle> &triangles, std::map<std::string, TextureMa
 		window.clearPixels();
 	}
 
-	brightnessFunction = phongBrightness;
+	// TO DO: Add keys to switch lighting modes
+	brightnessFunction = flatBrightness;
 
 	switch (RENDER) {
 		case 0:
@@ -592,20 +602,21 @@ void draw(std::vector<ModelTriangle> &triangles, std::map<std::string, TextureMa
 			window.clearPixels();
 			raster(triangles, textures, cam, window);
 			// render triangle where light source is
-			//wireFrame(extras, cam, window);
+			wireFrame(extras, cam, window);
 			break;
 		case 2:
 			window.clearPixels();
-			raytrace(triangles, textures, lights, cam, window);
+			raytrace(triangles, textures, normalMaps, lights, cam, window);
 			// render triangle where light source is
-			//wireFrame(extras, cam, window);
+			wireFrame(extras, cam, window);
 			break;
 		default:
 			break;
 	}
 }
 
-void handleEvent(SDL_Event &event, Light &testLight, Camera &cam, DrawingWindow &window) {
+void handleEvent(SDL_Event &event, std::vector<Light> &lights, Camera &cam, DrawingWindow &window) {
+	Light &testLight = lights.at(0);
 	if (event.type == SDL_KEYDOWN) {
 		// move left
 		if (event.key.keysym.sym == SDLK_a) {
@@ -772,9 +783,9 @@ glm::vec3 vertexNormal(Vertex &vertex, std::vector<ModelTriangle> &triangles) {
 }
 
 
-std::pair<std::map<std::string, Colour>, TextureMap> readMtl(const std::string &filename) {
+std::tuple<std::map<std::string, Colour>, std::map<std::string, TextureMap>, std::map<std::string, TextureMap>> readMtl(const std::string &filename) {
 	std::map<std::string, Colour> palette;
-	TextureMap texture;
+	std::map<std::string, TextureMap> textures, normals;
 	std::ifstream file(filename);
 	std::string line;
 	std::string name;
@@ -801,19 +812,27 @@ std::pair<std::map<std::string, Colour>, TextureMap> readMtl(const std::string &
 			// find texture filename and create TextureMap object
 			size_t parent = filename.find_last_of('/');
 			std::string texFile = filename.substr(0, parent + 1) + splitln[1];
-			texture = TextureMap(texFile);
+			TextureMap texture = TextureMap(texFile);
+			textures.insert({name, texture});
+		}
+		if (splitln[0] == "map_bump") {
+			size_t parent = filename.find_last_of('/');
+			std::string texFile = filename.substr(0, parent + 1) + splitln[1];
+			TextureMap normal = TextureMap(texFile);
+			normals.insert({name, normal});
 		}
 	}
 
-	return {palette, texture};
+	return {palette, textures, normals};
 }
 
-std::pair<std::vector<ModelTriangle>, TextureMap> readObj(const std::string &filename, float modelScale = 0.35) {
+std::tuple<std::vector<ModelTriangle>, std::map<std::string, TextureMap>, std::map<std::string, TextureMap>> readObj(const std::string &filename, float modelScale = 0.35) {
 	std::vector<ModelTriangle> triangles;
 	std::vector<glm::vec3> vertices;
 	std::vector<TexturePoint> texturePoints;
 	std::map<std::string, Colour> palette;
-	TextureMap texture;
+	std::map<std::string, TextureMap> textures, normalMaps;
+	TextureMap texture, normalMap;
 	Colour trigColour;
 	std::string line;
 	std::vector<std::string> splitln;
@@ -826,13 +845,21 @@ std::pair<std::vector<ModelTriangle>, TextureMap> readObj(const std::string &fil
 		if (splitln[0] == "mtllib") {
 			size_t parent = filename.find_last_of('/');
 			std::string matFile = filename.substr(0, parent + 1) + splitln[1];
-			std::pair<std::map<std::string, Colour>, TextureMap> mtl = readMtl(matFile);
-			palette = mtl.first;
-			texture = mtl.second;
+			std::tuple<std::map<std::string, Colour>, std::map<std::string, TextureMap>, std::map<std::string, TextureMap>> mtl = readMtl(matFile);
+			palette = std::get<0>(mtl);
+			textures = std::get<1>(mtl);
+			normalMaps = std::get<2>(mtl);
 		}
 		if (splitln[0] == "usemtl") {
-			// look up colour from palette when reading 'usemtl'
+			// look up colour from palette
 			trigColour = palette[splitln[1]];
+			// check if texture and normal map exist for this material, otherwise reset them
+			auto it = textures.find(splitln[1]);
+			if (it != textures.end()) texture = it->second;
+			else texture = TextureMap();
+			it = normalMaps.find(splitln[1]);
+			if (it != normalMaps.end()) normalMap = it->second;
+			else normalMap = TextureMap();
 		}
 		if (splitln[0] == "v") {
 			// convert coords to floats and scale by 'modelScale' (ignoring first index which will be 'v')
@@ -867,12 +894,20 @@ std::pair<std::vector<ModelTriangle>, TextureMap> readObj(const std::string &fil
 				TexturePoint t0 = texturePoints[it0], t1 = texturePoints[it1], t2 = texturePoints[it2];
 				v0.texturePoint = t0; v1.texturePoint = t1; v2.texturePoint = t2;
 			}
+			// set normal map points if used
+			if (!normalMap.name.empty()) {
+				v0.normalPoint = TexturePoint(0, 0);
+				v1.normalPoint = TexturePoint((v1.position - v0.position).x, (v1.position - v0.position).y);
+				v2.normalPoint = TexturePoint((v2.position - v0.position).x, (v2.position - v0.position).y);
+			}
 			// calculate triangle face normal
 			glm::vec3 normal = normalize(cross(v1.position - v0.position, v2.position - v0.position));
 			// create new triangle
 			ModelTriangle modelTriangle = {v0, v1, v2, trigColour};
 			modelTriangle.normal = normal;
 			modelTriangle.texture = texture.name;
+			modelTriangle.normalMap = normalMap.name;
+
 			// add triangle
 			triangles.emplace_back(modelTriangle);
 		}
@@ -885,7 +920,15 @@ std::pair<std::vector<ModelTriangle>, TextureMap> readObj(const std::string &fil
 		}
 	}
 
-	return {triangles, texture};
+	// re-key textures by the texture name
+	for (auto t : textures) {
+		if (textures.insert({t.second.name, t.second}).second) textures.erase(t.first);
+	}
+	for (auto n : normalMaps) {
+		if (normalMaps.insert({n.second.name, n.second}).second) normalMaps.erase(n.first);
+	}
+
+	return {triangles, textures, normalMaps};
 }
 
 
@@ -899,16 +942,16 @@ std::pair<std::vector<ModelTriangle>, TextureMap> readObj(const std::string &fil
 	// READ OBJ AND MTL FILES
 	// create vector of triangles and textures
 	std::vector<ModelTriangle> triangles;
-	std::map<std::string, TextureMap> textures;
+	std::map<std::string, TextureMap> textures, normalMaps;
 
 	// read obj files
-	std::vector<ModelTriangle> box = readObj(BOX_OBJ).first;
-	std::vector<ModelTriangle> sphere = readObj(SPH_OBJ).first;
-	std::vector<ModelTriangle> bunny = readObj(BUNNY_OBJ).first;
-
-	std::pair<std::vector<ModelTriangle>, TextureMap> hackspace = readObj(HACK_OBJ, 0.001f);
-	std::vector<ModelTriangle> hackspaceLogo = hackspace.first;
-	TextureMap hackTexture = hackspace.second;
+	std::tuple<std::vector<ModelTriangle>, std::map<std::string, TextureMap>, std::map<std::string, TextureMap>> cornellBox = readObj(BOX_OBJ);
+	std::map<std::string, TextureMap> boxNormal = std::get<2>(cornellBox);
+	std::vector<ModelTriangle> box = std::get<0>(cornellBox);
+	std::vector<ModelTriangle> sphere = std::get<0>(readObj(SPH_OBJ));
+	std::vector<ModelTriangle> bunny = std::get<0>(readObj(BUNNY_OBJ));
+	std::tuple<std::vector<ModelTriangle>, std::map<std::string, TextureMap>, std::map<std::string, TextureMap>> hackspace = readObj(HACK_OBJ, 0.001f);
+	std::vector<ModelTriangle> hackspaceLogo = std::get<0>(hackspace);
 
 	// insert obj triangles into vector of all triangles (if needed)
 	triangles.insert(triangles.end(), box.begin(), box.end());
@@ -916,13 +959,16 @@ std::pair<std::vector<ModelTriangle>, TextureMap> readObj(const std::string &fil
 	triangles.insert(triangles.end(), hackspaceLogo.begin(), hackspaceLogo.end());
 	triangles.insert(triangles.end(), bunny.begin(), bunny.end());
 
-	// insert obj textures into vector of all textures
-	textures.insert({hackTexture.name, hackTexture});
+	// insert obj textures into map of all textures
+	textures.insert(std::get<1>(hackspace).begin(), std::get<1>(hackspace).end());
 
-	// initialise light source and camera
+	// insert obj normals into map of all normals
+	normalMaps.insert(boxNormal.begin(), boxNormal.end());
+
+	// initialise lights and camera
 	Camera camera = Camera(3.0f);
-	Light ceiling = Light(AREA, 50.0f);
-	Light pointLight = Light(POINT, glm::vec3(0.7f, 0.5f, 0.5f), 25.0f);
+	Light ceiling = Light(AREA, 25.0f);
+	Light pointLight = Light(POINT, glm::vec3(0, 0.9, 0), 25.0f);
 
 	std::vector<Light> lights = {ceiling};
 
@@ -932,12 +978,12 @@ std::pair<std::vector<ModelTriangle>, TextureMap> readObj(const std::string &fil
 		// basic frame time calculator
 		elapsed = time(nullptr) - start;
 		if (elapsed >= 1) {
-			std::cout << "frame time: " << elapsed  << "s" << std::endl;
+			std::cout << "frame time: " << elapsed << "s" << std::endl;
 			start = time(nullptr);
 		}
 		// We MUST poll for events - otherwise the window will freeze !
-		if (window.pollForInputEvents(event)) handleEvent(event, ceiling, camera, window);
-		draw(triangles, textures, lights, camera, window);
+		if (window.pollForInputEvents(event)) handleEvent(event, lights, camera, window);
+		draw(triangles, textures, normalMaps, lights, camera, window);
 		// Need to render the frame at the end, or nothing actually gets shown on the screen !
 		window.renderFrame();
 	}

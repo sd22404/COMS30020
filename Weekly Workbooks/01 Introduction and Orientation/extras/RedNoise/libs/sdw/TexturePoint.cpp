@@ -18,6 +18,11 @@ TexturePoint operator+(const TexturePoint &other, const TexturePoint &point) {
 	return tp;
 }
 
+TexturePoint operator-(const TexturePoint &other, const TexturePoint &point) {
+	TexturePoint tp = TexturePoint(other.x - point.x, other.y - point.y);
+	return tp;
+}
+
 bool operator!=(const TexturePoint &other, const TexturePoint &point) {
 	return !(other.x == point.x && other.y == point.y);
 }

@@ -12,6 +12,7 @@ struct ModelTriangle {
 	Colour colour{};
 	glm::vec3 normal{};
 	std::string texture{};
+	std::string normalMap{};
 
 	Vertex &v0();
 	Vertex &v1();

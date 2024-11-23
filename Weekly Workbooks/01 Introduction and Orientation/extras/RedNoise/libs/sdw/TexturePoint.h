@@ -11,5 +11,6 @@ struct TexturePoint {
 	friend std::ostream &operator<<(std::ostream &os, const TexturePoint &point);
 	friend TexturePoint operator*(const float &scale, const TexturePoint &point);
 	friend TexturePoint operator+(const TexturePoint &other, const TexturePoint &point);
+	friend TexturePoint operator-(const TexturePoint &other, const TexturePoint &point);
 	friend bool operator!=(const TexturePoint &other, const TexturePoint &point);
 };
