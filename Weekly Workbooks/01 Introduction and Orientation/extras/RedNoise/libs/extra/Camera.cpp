@@ -1,7 +1,5 @@
 #include "Camera.h"
 
-
-
 Camera::Camera() = default;
 
 Camera::Camera(float focalLength) : focalLength(focalLength) {}

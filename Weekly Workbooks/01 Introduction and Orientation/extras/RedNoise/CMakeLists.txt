@@ -29,7 +29,7 @@ include_directories(libs/sdw)
 add_executable(RedNoise
         libs/sdw/CanvasPoint.cpp
         libs/sdw/CanvasTriangle.cpp
-        libs/sdw/Colour.cpp
+        libs/sdw/Material.cpp
         libs/sdw/DrawingWindow.cpp
         libs/sdw/ModelTriangle.cpp
         libs/sdw/RayTriangleIntersection.cpp

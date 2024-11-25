@@ -1,6 +1,2 @@
 newmtl Leopard
-map_Kd texture.ppm
-
-newmtl Mirror
-Kd 0 0 0
-Ks 1.000000 1.000000 1.000000
+map_Kd leopard.ppm

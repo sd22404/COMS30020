@@ -1,10 +1,9 @@
 #include "ModelTriangle.h"
-#include <utility>
 
 ModelTriangle::ModelTriangle() = default;
 
-ModelTriangle::ModelTriangle(const Vertex &v0, const Vertex &v1, const Vertex &v2, Colour trigColour) :
-		vertices({{v0, v1, v2}}), colour(std::move(trigColour)) {}
+ModelTriangle::ModelTriangle(const Vertex &v0, const Vertex &v1, const Vertex &v2, Material &mat) :
+		vertices({{v0, v1, v2}}), material(mat) {}
 
 Vertex &ModelTriangle::v0() {
 	return {vertices[0]};

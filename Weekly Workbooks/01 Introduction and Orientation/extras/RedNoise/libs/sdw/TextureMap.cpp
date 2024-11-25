@@ -13,9 +13,9 @@ TextureMap::TextureMap(const std::string &filename) {
 	auto widthAndHeight = split(nextLine, ' ');
 	if (widthAndHeight.size() != 2)
 		throw std::invalid_argument("Failed to parse width and height line, line was `" + nextLine + "`");
-	size_t parent = filename.find_last_of('/');
-	size_t parentParent = filename.substr(0, parent).find_last_of('/') + 1;
-	name = filename.substr(parentParent, parent - parentParent);
+	size_t parentDir = filename.find_last_of('/') + 1;
+	std::string file = filename.substr(parentDir, filename.size() - parentDir);
+	name = file.substr(0, file.size() - 4);
 	width = std::stoi(widthAndHeight[0]);
 	height = std::stoi(widthAndHeight[1]);
 	// Read the max value (which we assume is 255)
