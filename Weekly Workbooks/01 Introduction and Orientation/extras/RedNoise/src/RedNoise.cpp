@@ -17,10 +17,10 @@
 #define WIDTH 1280
 #define HEIGHT 960
 
-#define MIN_INTERSECT_DISTANCE 0.0001f
+#define MIN_INTERSECT_DISTANCE 0.001f
 #define MAX_INTERSECT_DISTANCE 20.0f
 #define AREA_LIGHT_SAMPLES 64
-#define MIRROR_BOUNCE_CAP 3
+#define MAX_RAY_BOUNCES 4
 
 const std::string SCENE_OBJ = "./assets/scene/scene.obj";
 const std::string IDENT_OBJ = "./assets/ident/ident.obj";
@@ -52,23 +52,40 @@ RayTriangleIntersection closestIntersection(std::vector<ModelTriangle> &triangle
 		}
 	}
 
+	// interpolate normal if phong shading
+	if (cam.shadingMode == PHONG) {
+		ModelTriangle &triangle = intersection.intersectedTriangle;
+		glm::vec3 &bCoords = intersection.barycentricPoint;
+		intersection.intersectedTriangle.normal = normalize(bCoords.x * triangle.v1().normal + bCoords.y * triangle.v2().normal + bCoords.z * triangle.v0().normal);
+	}
+
 	// bounce again if mirrored surface
 	ModelTriangle &triangle = intersection.intersectedTriangle;
 	if (triangle.material.mirrored && bounces > 0) {
-		glm::vec3 normal, &bCoords = intersection.barycentricPoint;
-		glm::vec3 incidence = rayDirection;
-		// phong reflections
-		if (cam.shadingMode == PHONG) normal = normalize(bCoords.x * triangle.v1().normal + bCoords.y * triangle.v2().normal + bCoords.z * triangle.v0().normal);
-		else normal = triangle.normal;
-		glm::vec3 start = intersection.intersectionPoint;
-		glm::vec3 reflect = incidence - 2.0f * normal * dot(incidence, normal);
-		glm::vec3 perturbation = normalize(glm::vec3(rand(), rand(), rand()));
-		glm::vec3 scatter = (normalize(reflect) + triangle.material.roughness * perturbation);
-		RayTriangleIntersection newIntersection;
-		//if (dot(scatter, normal) > 0) newIntersection = closestIntersection(triangles, start, scatter, bounces - 1);
-		//newIntersection.intersectedTriangle.colour.diffuse = triangle.colour.roughness * triangle.colour.diffuse + newIntersection.intersectedTriangle.colour.diffuse;
-		newIntersection = closestIntersection(triangles, start, scatter, cam, bounces - 1);
-		return newIntersection;
+		glm::vec3 normal = triangle.normal, incidence = rayDirection, start = intersection.intersectionPoint;
+		glm::vec3 reflect = normalize(incidence - 2.0f * normal * dot(incidence, normal));
+		return closestIntersection(triangles, start, reflect, cam, bounces - 1);
+	}
+	if (triangle.material.glassy && bounces > 0) {
+		glm::vec3 normal = triangle.normal, incidence = rayDirection, start = intersection.intersectionPoint, newDirection;
+		glm::vec3 reflect = normalize(incidence - 2.0f * normal * dot(incidence, normal));
+
+		// determine which side of triangle and adjust ri
+		float ri = dot(incidence, normal) > 0 ? 1.0f / triangle.material.refractiveIndex : triangle.material.refractiveIndex;
+		// using Snell's law
+		float cosTheta = glm::min(dot(-incidence, normal), 1.0f);
+		float sinTheta = sqrt(1.0f - cosTheta * cosTheta);
+		glm::vec3 refractPerpendicular = ri * (incidence + cosTheta * normal);
+		glm::vec3 refractParallel = -sqrt(float(abs(1.0f - pow(refractPerpendicular.length(), 2)))) * normal;
+		glm::vec3 refract = normalize(refractPerpendicular + refractParallel);
+		// using Schlick approximation for Fresnel
+		float r0 = powf((1 - ri) / (1 + ri), 2);
+		float reflectance = r0 + (1 - r0) * powf(1 - cosTheta, 5);
+		// check for total internal reflection
+		if (ri * sinTheta > 1.0f || reflectance > rand() / (float) RAND_MAX) newDirection = reflect;
+		else newDirection = refract;
+
+		return closestIntersection(triangles, start, newDirection, cam, bounces - 1);
 	}
 
 	return intersection;
@@ -90,7 +107,7 @@ bool inShadow(std::vector<ModelTriangle> &triangles, glm::vec3 &surface, glm::ve
 	// calculate shadowRay direction
 	glm::vec3 shadowRay = lightPos - surface;
 	// get the closest intersection of shadowRay from surface
-	RayTriangleIntersection obstacle = closestIntersection(triangles, surface, shadowRay, cam, 0, length(shadowRay));
+	RayTriangleIntersection obstacle = closestIntersection(triangles, surface, shadowRay, cam, MAX_RAY_BOUNCES, length(shadowRay));
 	// if obstacle doesn't exist then no shadow and isn't a light itself
 	if (obstacle.triangleIndex == size_t(-1) || obstacle.intersectedTriangle.material.emissive) return false;
 	return true;
@@ -98,7 +115,7 @@ bool inShadow(std::vector<ModelTriangle> &triangles, glm::vec3 &surface, glm::ve
 
 float proximityLighting(glm::vec3 &point, glm::vec3 &lightPos, float intensity) {
 	float dist = powf(distance(point, lightPos), 2);
-	// + intensity in denominator to avoid infinite brightness at light source
+	// + constant in denominator to avoid infinite brightness at light source
 	float brightness = intensity / float(4 * M_PI * dist + 5);
 	return brightness;
 }
@@ -138,14 +155,6 @@ float gouraudBrightness(RayTriangleIntersection &intersection, glm::vec3 &lightP
 	float v1_brightness = surfaceBrightness(intersection.intersectionPoint, v1_norm, lightPos, intensity, cam);
 	float v2_brightness = surfaceBrightness(intersection.intersectionPoint, v2_norm, lightPos, intensity, cam);
 	float brightness = bCoords.x * v1_brightness + bCoords.y * v2_brightness + bCoords.z * v0_brightness;
-	return brightness;
-}
-
-float phongBrightness(RayTriangleIntersection &intersection, glm::vec3 &lightPos, float intensity, Camera &cam) {
-	ModelTriangle &triangle = intersection.intersectedTriangle;
-	glm::vec3 &bCoords = intersection.barycentricPoint;
-	glm::vec3 normal = normalize(bCoords.x * triangle.v1().normal + bCoords.y * triangle.v2().normal + bCoords.z * triangle.v0().normal);
-	float brightness = surfaceBrightness(intersection.intersectionPoint, normal, lightPos, intensity, cam);
 	return brightness;
 }
 
@@ -220,13 +229,13 @@ bool isOffScreen(CanvasPoint &v0, const CanvasPoint &v1 = CanvasPoint(), const C
 
 std::vector<float> interpolateSingleFloats(float from, float to, size_t numberOfValues) {
 	// if one or fewer values, return only the start point (as it will be the same as the end point)
-	if (numberOfValues < 2) return std::vector<float>({from});
+	std::vector<float> result;
+	if (numberOfValues < 2) return result;
+
 	float interval = to - from;
 	float step = interval / float(numberOfValues - 1);
 
-	std::vector<float> result;
-	result.reserve(numberOfValues);
-	for (size_t i = 0; i < numberOfValues; i++) {
+	for (size_t i = 1; i < numberOfValues; i++) {
 		result.push_back(from + float(i) * step);
 	}
 	return result;
@@ -234,13 +243,14 @@ std::vector<float> interpolateSingleFloats(float from, float to, size_t numberOf
 
 std::vector<TexturePoint> interpolateTexturePoints(TexturePoint from, TexturePoint to, size_t numberOfValues) {
 	// if one or fewer values, return only the start point (as it will be the same as the end point)
-	if (numberOfValues < 2) return std::vector<TexturePoint>({from});
+	std::vector<TexturePoint> result = {from};
+	if (numberOfValues < 2) return result;
+
 	TexturePoint interval = {to.x - from.x, to.y - from.y};
 	float stepX = interval.x / float(numberOfValues - 1);
 	float stepY = interval.y / float(numberOfValues - 1);
 
-	std::vector<TexturePoint> result;
-	for (size_t i = 0; i < numberOfValues; i++) {
+	for (size_t i = 1; i < numberOfValues; i++) {
 		TexturePoint point = {from.x + float(i) * stepX, from.y + float(i) * stepY};
 		result.push_back(point);
 	}
@@ -249,15 +259,15 @@ std::vector<TexturePoint> interpolateTexturePoints(TexturePoint from, TexturePoi
 
 std::vector<CanvasPoint> interpolateCanvasPoints(CanvasPoint from, CanvasPoint to, size_t numberOfValues) {
 	// if one or fewer values, return only the start point (as it will be the same as the end point)
-	if (numberOfValues < 2) return std::vector<CanvasPoint>({from});
+	std::vector<CanvasPoint> result = {from};
+	if (numberOfValues < 2) return result;
 	CanvasPoint interval = {to.x - from.x, to.y - from.y, to.depth - from.depth};
 	float stepX = interval.x / float(numberOfValues - 1);
 	float stepY = interval.y / float(numberOfValues - 1);
 	float stepD = interval.depth / float(numberOfValues - 1);
 
 	std::vector<TexturePoint> tps = interpolateTexturePoints(from.texturePoint, to.texturePoint, numberOfValues);
-	std::vector<CanvasPoint> result;
-	for (size_t i = 0; i < numberOfValues; i++) {
+	for (size_t i = 1; i < numberOfValues; i++) {
 		CanvasPoint point = {from.x + float(i) * stepX, from.y + float(i) * stepY, from.depth + float(i) * stepD};
 		point.texturePoint = tps[i];
 		result.push_back(point);
@@ -267,13 +277,14 @@ std::vector<CanvasPoint> interpolateCanvasPoints(CanvasPoint from, CanvasPoint t
 
 std::vector<glm::vec3> interpolateThreeElementValues(glm::vec3 from, glm::vec3 to, size_t numberOfValues) {
 	// if one or fewer values, return only the start point (as it will be the same as the end point)
-	if (numberOfValues < 2) return std::vector<glm::vec3>({from});
+	std::vector<glm::vec3> result = {from};
+	if (numberOfValues < 2) return result;
+
 	glm::vec3 interval = to - from;
 	glm::vec3 step = interval / float(numberOfValues - 1);
 
-	std::vector<glm::vec3> result;
 	result.reserve(numberOfValues);
-	for (size_t i = 0; i < numberOfValues; i++) {
+	for (size_t i = 1; i < numberOfValues; i++) {
 		result.push_back(from + float(i) * step);
 	}
 	return result;
@@ -336,10 +347,10 @@ void fillHalfTriangle(CanvasPoint &v0, CanvasPoint &v1, CanvasPoint &v3, std::ve
 	// pack colour
 	uint32_t packedCol = (255 << 24) + (int(mat.diffuse.r * 255) << 16) + (int(mat.diffuse.g * 255) << 8) + int(mat.diffuse.b * 255);
 
-	// interpolate between top and middle vertices to get left and right edges
+	// interpolate between top/bottom and middle vertices to get left and right edges
 	int minY = int(round(v0.y));
 	int maxY = int(round(v1.y));
-	std::vector<CanvasPoint> right = interpolateCanvasPoints(v0, v3, abs(maxY - minY) + 2);
+	std::vector<CanvasPoint> right = interpolateCanvasPoints(v0, v3, abs(maxY - minY) + 2); // not sure why this is +2 instead of +1
 	std::vector<CanvasPoint> left = interpolateCanvasPoints(v0, v1, abs(maxY - minY) + 2);
 	std::vector<CanvasPoint> row;
 
@@ -350,11 +361,10 @@ void fillHalfTriangle(CanvasPoint &v0, CanvasPoint &v1, CanvasPoint &v3, std::ve
 		row = interpolateCanvasPoints(left[i], right[i], rowLength);
 		for (int j = 0; j < rowLength; j++) {
 			int x = int(round(row[j].x)), y = int(round(row[j].y));
-			// if within triangle range and screen range
-			// if existing depth is less than current depth, draw pixel and update depth
+			// if within screen range and existing depth is less than new depth, draw pixel and update depth
 			if (!(x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT) && depthBuffer[y][x] < row[j].depth) {
 				if (textured) {
-					packedCol = texture.pixels[(int(round(row[j].texturePoint.y * float(texture.height))) * texture.width + int(round(row[j].texturePoint.x * float(texture.width)))) % (texture.width * texture.height)];
+					packedCol = texture.pixels[(int(round(row[j].texturePoint.y * float(texture.height))) * texture.width + int(round(row[j].texturePoint.x * float(texture.width)))) % texture.pixels.size()];
 				}
 				window.setPixelColour(x, y, packedCol);
 				depthBuffer[y][x] = row[j].depth;
@@ -479,7 +489,7 @@ void pointCloud(std::vector<ModelTriangle> &triangles, glm::vec3 &colour, Camera
 			// check points are on-screen
 			if (!isOffScreen(point)) {
 				uint32_t packedCol = (255 << 24) + (int(colour.r * 255) << 16) + (int(colour.g) << 8) + int(colour.b);
-				window.setPixelColour(size_t(point.x), size_t(point.y), packedCol);
+				window.setPixelColour(floor(point.x), floor(point.y), packedCol);
 			}
 		}
 	}
@@ -520,7 +530,7 @@ void raytrace(std::vector<ModelTriangle> &triangles, std::map<std::string, Textu
 			// get the closest intersection of a ray through current (x,y) on the image plane
 			CanvasPoint canvasPoint = CanvasPoint(float(x), float(y));
 			glm::vec3 rayDirection = rayFromCanvasPoint(canvasPoint, cam);
-			RayTriangleIntersection surface = closestIntersection(triangles, cam.position, rayDirection, cam, MIRROR_BOUNCE_CAP);
+			RayTriangleIntersection surface = closestIntersection(triangles, cam.position, rayDirection, cam, MAX_RAY_BOUNCES);
 			ModelTriangle &triangle = surface.intersectedTriangle;
 			// if hit a triangle
 			if (surface.triangleIndex != size_t(-1)) {
@@ -530,7 +540,7 @@ void raytrace(std::vector<ModelTriangle> &triangles, std::map<std::string, Textu
 				if (!triangle.texture.empty()) {
 					TextureMap &texture = textures[triangle.texture];
 					TexturePoint texturePoint = barycentricTexturePoint(triangle, surface.barycentricPoint);
-					uint32_t packedCol = texture.pixels[(int(round(texturePoint.y * float(texture.height))) * texture.width + int(round(texturePoint.x * float(texture.width)))) % (texture.width * texture.height)];
+					uint32_t packedCol = texture.pixels[(int(round(texturePoint.y * float(texture.height))) * texture.width + int(round(texturePoint.x * float(texture.width)))) % texture.pixels.size()];
 					uint32_t rgb = packedCol - (255 << 24);
 					uint32_t r = rgb >> 16;
 					uint32_t g = (rgb - (r << 16)) >> 8;
@@ -553,21 +563,29 @@ void raytrace(std::vector<ModelTriangle> &triangles, std::map<std::string, Textu
 				if (!triangle.material.emissive) {
 					// calculate brightness (Phong, Gouraud or face-normal techniques) for each light
 					for (Light light : lights) {
-						float lightBrightness = 0.0f;
-						// sample light once if point light, AREA_LIGHT_SAMPLES times if area light
-						#pragma omp parallel for default(none) shared(light, triangle, triangles, surface, cam, brightnessFunction, std::cout) reduction(+:lightBrightness) num_threads(2)
-						for (int s = 0; s < AREA_LIGHT_SAMPLES; s++) {
-							glm::vec3 lightPoint = light.sample();
-							float sampleBrightness;
-							// if normal mapped, use flat shading not interpolated normals
-							if (triangle.normalMap.empty()) sampleBrightness = brightnessFunction(surface, lightPoint, light.intensity, cam);
-							else sampleBrightness = flatBrightness(surface, lightPoint, light.intensity, cam);
-							// if in shadow set brightness to zero
-							if (inShadow(triangles, surface.intersectionPoint, lightPoint, cam)) sampleBrightness = 0;
-							lightBrightness += sampleBrightness;
-							if (light.type != AREA) s = AREA_LIGHT_SAMPLES;
+						// check that surface is in front of area light
+						if (light.type == AREA && dot(cross(light.e1, light.e2), surface.intersectionPoint - light.position) > 0.0f) {
+							float lightBrightness = 0.0f;
+							// sample light once if point light, AREA_LIGHT_SAMPLES times if area light
+							#pragma omp parallel for default(none) shared(light, triangle, triangles, surface, cam, brightnessFunction, std::cout) reduction(+:lightBrightness) num_threads(2)
+							for (int s = 0; s < AREA_LIGHT_SAMPLES; s++) {
+								glm::vec3 lightPoint = light.sample();
+								float sampleBrightness;
+								if (light.type == AREA) {
+
+								}
+								// if normal mapped, use flat shading not interpolated normals
+								if (triangle.normalMap.empty()) sampleBrightness = brightnessFunction(surface, lightPoint, light.intensity, cam);
+								else sampleBrightness = flatBrightness(surface, lightPoint, light.intensity, cam);
+								// if in shadow set brightness to zero
+								if (inShadow(triangles, surface.intersectionPoint, lightPoint, cam)) sampleBrightness = 0;
+								lightBrightness += sampleBrightness;
+								// exit loop after one iteration if not area light
+								if (light.type != AREA) s = AREA_LIGHT_SAMPLES;
+							}
+							brightness += lightBrightness / float(light.type == AREA ? AREA_LIGHT_SAMPLES : 1.0f);
 						}
-						brightness += lightBrightness / float(light.type == AREA ? AREA_LIGHT_SAMPLES : 1.0f);
+
 					}
 				} else brightness = 1.0f;
 				// clamp between ambient lighting and one
@@ -720,7 +738,7 @@ void handleEvent(SDL_Event &event, std::vector<Light> &lights, Camera &cam, Draw
 		// switch shading mode
 		else if (event.key.keysym.sym == SDLK_4) { cam.shadingMode = FLAT; brightnessFunction = flatBrightness; std::cout << "Using flat shading..." << std::endl; }
 		else if (event.key.keysym.sym == SDLK_5) { cam.shadingMode = GOURAUD; brightnessFunction = gouraudBrightness; std::cout << "Using gouraud shading..." << std::endl; }
-		else if (event.key.keysym.sym == SDLK_6) { cam.shadingMode = PHONG; brightnessFunction = phongBrightness; std::cout << "Using phong shading..." << std::endl; }
+		else if (event.key.keysym.sym == SDLK_6) { cam.shadingMode = PHONG; brightnessFunction = flatBrightness; std::cout << "Using phong shading..." << std::endl; }
 	} else if (event.type == SDL_MOUSEBUTTONDOWN) {
 		window.savePPM("output.ppm");
 		window.saveBMP("output.bmp");
@@ -769,11 +787,15 @@ std::tuple<std::map<std::string, Material>, std::map<std::string, TextureMap>, s
 		if (splitln[0] == "Ks") {
 			materials.insert({name, Material(name, glm::vec3(0, 0, 0))});
 			materials[name].mirrored = true;
-			materials[name].roughness = 1.0f - strtof(splitln[1].c_str(), nullptr);
 		}
 		if (splitln[0] == "Ke") {
 			materials.insert({name, Material(name, glm::vec3(1, 1, 1))});
 			materials[name].emissive = true;
+		}
+		if (splitln[0] == "Ka") {
+			materials.insert({name, Material(name, glm::vec3(1, 1, 1))});
+			materials[name].glassy = true;
+			materials[name].refractiveIndex = strtof(splitln[1].c_str(), nullptr);
 		}
 		if (splitln[0] == "map_Kd") {
 			materials.insert({name, Material(name, glm::vec3(0, 0, 0))});
@@ -920,13 +942,13 @@ std::tuple<std::vector<ModelTriangle>, std::map<std::string, TextureMap>, std::m
 	// INITIALISE LIGHTS AND CAMERA
 	std::vector<Light> lights;
 
-	//Camera camera = Camera(glm::vec3(0, 0.6, 2), rotateX(degToRad(-10.0f)) * DEFAULT_ROT);
+	//Camera camera = Camera(glm::vec3(0, 0.6, 2), rotateX(degToRad(-10.0f)) * glm::mat3(glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f)));
 	Camera camera = Camera();
 	Light ceiling = Light(AREA, 20.0f);
-	Light ident = Light(AREA, IDENT0, IDENT1 - IDENT0, IDENT2 - IDENT0, 10.0f);
-	Light pointLight = Light(POINT, glm::vec3(0, 0.9, 0), 10.0f);
+	Light ident = Light(AREA, IDENT0, IDENT1 - IDENT0, IDENT2 - IDENT0, 40.0f);
+	Light pointLight = Light(POINT, glm::vec3(1, 0, 3), 10.0f);
 
-	lights.insert(lights.end(), ident);
+	lights.insert(lights.end(), {ident});
 	brightnessFunction = flatBrightness;
 
 	time_t start = time(nullptr);
@@ -944,8 +966,8 @@ std::tuple<std::vector<ModelTriangle>, std::map<std::string, TextureMap>, std::m
 		// basic frame time calculator
 		if (elapsed >= 1) {
 			float ms = float(elapsed) * 1000.0f / float(frames);
-			if (ms > 60000.0f) { ms /= 1000.0f; std::cout << "frame time: " << int(ms / 60) << "m " << int(ms) % 60 << "s" << std::endl; }
-			else if (ms > 1000.0f) { ms /= 1000.0f; std::cout << "frame time: " << ms << "s" << std::endl; }
+			if (ms >= 60000.0f) { ms /= 1000.0f; std::cout << "frame time: " << int(ms / 60) << "m " << int(ms) % 60 << "s" << std::endl; }
+			else if (ms >= 1000.0f) { ms /= 1000.0f; std::cout << "frame time: " << ms << "s" << std::endl; }
 			else std::cout << "frame time: " << ms << "ms" << std::endl;
 
 			start = time(nullptr);

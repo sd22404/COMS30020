@@ -9,7 +9,7 @@ struct Material {
 	bool emissive{};
 	bool mirrored{};
 	bool glassy{};
-	float roughness{};
+	float refractiveIndex{};
 
 	Material();
 	explicit Material(glm::vec3 colour);
