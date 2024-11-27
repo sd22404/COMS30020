@@ -12,6 +12,8 @@
 #include <Camera.h>
 #include <functional>
 #include <Light.h>
+#include <sstream>
+
 #include "omp.h"
 
 #define WIDTH 1280
@@ -23,7 +25,6 @@
 #define MAX_RAY_BOUNCES 4
 
 const std::string SCENE_OBJ = "./assets/scene/scene.obj";
-const std::string IDENT_OBJ = "./assets/ident/ident.obj";
 
 std::function<float(RayTriangleIntersection &surface, glm::vec3 &lightPos, float intensity, Camera &cam)> brightnessFunction;
 
@@ -82,7 +83,7 @@ RayTriangleIntersection closestIntersection(std::vector<ModelTriangle> &triangle
 		float r0 = powf((1 - ri) / (1 + ri), 2);
 		float reflectance = r0 + (1 - r0) * powf(1 - cosTheta, 5);
 		// check for total internal reflection
-		if (ri * sinTheta > 1.0f || reflectance > rand() / (float) RAND_MAX) newDirection = reflect;
+		if (ri * sinTheta > 1.0f || reflectance > 1.0f) newDirection = reflect; // reflectance > rand() / (float) RAND_MAX
 		else newDirection = refract;
 
 		return closestIntersection(triangles, start, newDirection, cam, bounces - 1);
@@ -670,8 +671,56 @@ void draw(std::vector<ModelTriangle> &triangles, std::map<std::string, TextureMa
 	}
 }
 
-void animate() {
+void animate(std::vector<ModelTriangle> &triangles, std::map<std::string, TextureMap> &textures, std::map<std::string, TextureMap> &normalMaps, std::vector<Light> &lights, Camera &cam, DrawingWindow &window) {
+	system("rm -r ./animation");
+	system("mkdir ./animation");
+	int frames = 0, sectionOne = 72, sectionTwo = 144, sectionThree = 204;
+	Light ceiling = Light(AREA, 20.0f);
+	Light pointLight = Light(POINT, glm::vec3(1, 0, 3), 10.0f);
+	lights = {pointLight};
+	brightnessFunction = flatBrightness;
+	glm::vec3 white = {1, 1, 1};
+	#undef AREA_LIGHT_SAMPLES
+	#define AREA_LIGHT_SAMPLES 4
 
+	for (int frame = frames; frame < sectionOne; frame++) {
+		frames = frame + 1;
+		window.clearPixels();
+		wireFrame(triangles, white, cam, window);
+		cam.position = cam.position * rotateY(degToRad(cam.altLookSpeed));
+		glm::vec3 target = {0, 0, 0};
+		lookAt(target, cam);
+
+		std::stringstream filename;
+		filename << "./animation/" << std::to_string(frame) << ".ppm";
+		window.savePPM(filename.str());
+	}
+
+	for (int frame = frames; frame < sectionTwo; frame++) {
+		frames = frame + 1;
+		window.clearPixels();
+		raster(triangles, textures, cam, window);
+
+		cam.position += cam.moveSpeed * glm::vec3(0.5, 0.1, 0);
+		glm::vec3 target = {0, 0, 0};
+		lookAt(target, cam);
+
+		std::stringstream filename;
+		filename << "./animation/" << std::to_string(frame) << ".ppm";
+		window.savePPM(filename.str());
+	}
+
+	for (int frame = frames; frame < sectionThree; frame++) {
+		frames = frame + 1;
+		window.clearPixels();
+		raytrace(triangles, textures, normalMaps, lights, cam, window);
+
+		pointLight.position += cam.moveSpeed * glm::vec3(0, 0, -1);
+
+		std::stringstream filename;
+		filename << "./animation/" << std::to_string(frame) << ".ppm";
+		window.savePPM(filename.str());
+	}
 }
 
 void handleEvent(SDL_Event &event, std::vector<Light> &lights, Camera &cam, DrawingWindow &window) {
@@ -934,7 +983,7 @@ std::tuple<std::vector<ModelTriangle>, std::map<std::string, TextureMap>, std::m
 	std::map<std::string, TextureMap> textures, normalMaps;
 
 	// read obj and mtl files and store
-	auto scene = readObj(IDENT_OBJ);
+	auto scene = readObj(SCENE_OBJ);
 	triangles.insert(triangles.end(), std::get<0>(scene).begin(), std::get<0>(scene).end());
 	textures.insert(std::get<1>(scene).begin(), std::get<1>(scene).end());
 	normalMaps.insert(std::get<2>(scene).begin(), std::get<2>(scene).end());
@@ -942,14 +991,15 @@ std::tuple<std::vector<ModelTriangle>, std::map<std::string, TextureMap>, std::m
 	// INITIALISE LIGHTS AND CAMERA
 	std::vector<Light> lights;
 
-	//Camera camera = Camera(glm::vec3(0, 0.6, 2), rotateX(degToRad(-10.0f)) * glm::mat3(glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f)));
 	Camera camera = Camera();
 	Light ceiling = Light(AREA, 20.0f);
-	Light ident = Light(AREA, IDENT0, IDENT1 - IDENT0, IDENT2 - IDENT0, 40.0f);
 	Light pointLight = Light(POINT, glm::vec3(1, 0, 3), 10.0f);
 
-	lights.insert(lights.end(), {ident});
+	lights.insert(lights.end(), {ceiling});
 	brightnessFunction = flatBrightness;
+
+	// UNCOMMENT FOR ANIMATION
+	animate(triangles, textures, normalMaps, lights, camera, window);
 
 	time_t start = time(nullptr);
 	time_t elapsed;
