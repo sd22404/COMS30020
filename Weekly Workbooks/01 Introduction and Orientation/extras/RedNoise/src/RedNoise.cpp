@@ -16,15 +16,16 @@
 
 #include "omp.h"
 
-#define WIDTH 1280
-#define HEIGHT 960
+#define WIDTH 640
+#define HEIGHT 480
 
 #define MIN_INTERSECT_DISTANCE 0.001f
 #define MAX_INTERSECT_DISTANCE 20.0f
-#define AREA_LIGHT_SAMPLES 64
+#define AREA_LIGHT_SAMPLES 2
 #define MAX_RAY_BOUNCES 4
 
-const std::string SCENE_OBJ = "./assets/scene/scene.obj";
+const std::string SCENE_ONE = "./assets/scenes/scene-1.obj";
+const std::string SCENE_TWO = "./assets/scenes/scene-2.obj";
 
 std::function<float(RayTriangleIntersection &surface, glm::vec3 &lightPos, float intensity, Camera &cam)> brightnessFunction;
 
@@ -565,16 +566,13 @@ void raytrace(std::vector<ModelTriangle> &triangles, std::map<std::string, Textu
 					// calculate brightness (Phong, Gouraud or face-normal techniques) for each light
 					for (Light light : lights) {
 						// check that surface is in front of area light
-						if (light.type == AREA && dot(cross(light.e1, light.e2), surface.intersectionPoint - light.position) > 0.0f) {
+						if ((light.type == AREA && dot(cross(light.e1, light.e2), surface.intersectionPoint - light.position) > 0.0f) || light.type != AREA) {
 							float lightBrightness = 0.0f;
 							// sample light once if point light, AREA_LIGHT_SAMPLES times if area light
 							#pragma omp parallel for default(none) shared(light, triangle, triangles, surface, cam, brightnessFunction, std::cout) reduction(+:lightBrightness) num_threads(2)
 							for (int s = 0; s < AREA_LIGHT_SAMPLES; s++) {
 								glm::vec3 lightPoint = light.sample();
 								float sampleBrightness;
-								if (light.type == AREA) {
-
-								}
 								// if normal mapped, use flat shading not interpolated normals
 								if (triangle.normalMap.empty()) sampleBrightness = brightnessFunction(surface, lightPoint, light.intensity, cam);
 								else sampleBrightness = flatBrightness(surface, lightPoint, light.intensity, cam);
@@ -586,7 +584,6 @@ void raytrace(std::vector<ModelTriangle> &triangles, std::map<std::string, Textu
 							}
 							brightness += lightBrightness / float(light.type == AREA ? AREA_LIGHT_SAMPLES : 1.0f);
 						}
-
 					}
 				} else brightness = 1.0f;
 				// clamp between ambient lighting and one
@@ -612,13 +609,6 @@ void raytrace(std::vector<ModelTriangle> &triangles, std::map<std::string, Textu
 void draw(std::vector<ModelTriangle> &triangles, std::map<std::string, TextureMap> &textures, std::map<std::string, TextureMap> &normalMaps, std::vector<Light> &lights, Camera &cam, DrawingWindow &window) {
 	// clear frame before drawing anything new
 	window.clearPixels();
-
-	/*
-	CanvasPoint cp = CanvasPoint(WIDTH / 2, HEIGHT / 2 - 50);
-	glm::vec3 dir = rayFromCanvasPoint(cp, cam);
-	RayTriangleIntersection surface = closestIntersection(triangles, cam.position, dir, 0);
-	std::cout << inShadow(triangles, surface.intersectionPoint, lights.at(0).position) << std::endl;
-	*/
 
 	Material red = Material({1, 0, 0});
 	Material white = Material({1, 1, 1});
@@ -668,58 +658,6 @@ void draw(std::vector<ModelTriangle> &triangles, std::map<std::string, TextureMa
 			break;
 		default:
 			break;
-	}
-}
-
-void animate(std::vector<ModelTriangle> &triangles, std::map<std::string, TextureMap> &textures, std::map<std::string, TextureMap> &normalMaps, std::vector<Light> &lights, Camera &cam, DrawingWindow &window) {
-	system("rm -r ./animation");
-	system("mkdir ./animation");
-	int frames = 0, sectionOne = 72, sectionTwo = 144, sectionThree = 204;
-	Light ceiling = Light(AREA, 20.0f);
-	Light pointLight = Light(POINT, glm::vec3(1, 0, 3), 10.0f);
-	lights = {pointLight};
-	brightnessFunction = flatBrightness;
-	glm::vec3 white = {1, 1, 1};
-	#undef AREA_LIGHT_SAMPLES
-	#define AREA_LIGHT_SAMPLES 4
-
-	for (int frame = frames; frame < sectionOne; frame++) {
-		frames = frame + 1;
-		window.clearPixels();
-		wireFrame(triangles, white, cam, window);
-		cam.position = cam.position * rotateY(degToRad(cam.altLookSpeed));
-		glm::vec3 target = {0, 0, 0};
-		lookAt(target, cam);
-
-		std::stringstream filename;
-		filename << "./animation/" << std::to_string(frame) << ".ppm";
-		window.savePPM(filename.str());
-	}
-
-	for (int frame = frames; frame < sectionTwo; frame++) {
-		frames = frame + 1;
-		window.clearPixels();
-		raster(triangles, textures, cam, window);
-
-		cam.position += cam.moveSpeed * glm::vec3(0.5, 0.1, 0);
-		glm::vec3 target = {0, 0, 0};
-		lookAt(target, cam);
-
-		std::stringstream filename;
-		filename << "./animation/" << std::to_string(frame) << ".ppm";
-		window.savePPM(filename.str());
-	}
-
-	for (int frame = frames; frame < sectionThree; frame++) {
-		frames = frame + 1;
-		window.clearPixels();
-		raytrace(triangles, textures, normalMaps, lights, cam, window);
-
-		pointLight.position += cam.moveSpeed * glm::vec3(0, 0, -1);
-
-		std::stringstream filename;
-		filename << "./animation/" << std::to_string(frame) << ".ppm";
-		window.savePPM(filename.str());
 	}
 }
 
@@ -970,6 +908,137 @@ std::tuple<std::vector<ModelTriangle>, std::map<std::string, TextureMap>, std::m
 }
 
 
+void animate(DrawingWindow &window) {
+	// READ OBJ AND MTL FILES
+	// create vector of triangles and textures
+	std::vector<ModelTriangle> triangles;
+	std::map<std::string, TextureMap> textures, normalMaps;
+
+	// read obj and mtl files and store
+	auto scene = readObj(SCENE_TWO);
+	triangles = std::get<0>(scene);
+	textures = std::get<1>(scene);
+	normalMaps = std::get<2>(scene);
+
+	// INITIALISE LIGHTS AND CAMERA
+	Camera cam = Camera(glm::vec3(0, 0, 3), 2.0f);
+	Light ceiling = Light(AREA, 20.0f);
+	Light pointLight = Light(POINT, glm::vec3(0.0, 0.75, 0.5), 10.0f);
+	std::vector<Light> lights = {pointLight};
+	cam.shadingMode = FLAT;
+	brightnessFunction = flatBrightness;
+
+	glm::vec3 white = {1, 1, 1};
+
+	system("rm -r ./animation");
+	system("mkdir ./animation");
+	int frames = 0, sectionOne = 120, sectionTwo = 180, sectionThree = 360, sectionFour = 480, sectionFive = 600;
+
+	for (int frame = frames; frame < sectionOne; frame++) {
+		frames = frame + 1;
+		window.clearPixels();
+		wireFrame(triangles, white, cam, window);
+		window.renderFrame();
+
+		cam.position = cam.position * rotateY(degToRad(360.0f / float(sectionOne)));
+		glm::vec3 target = {0, 0, 0};
+		lookAt(target, cam);
+
+		std::stringstream filename;
+		filename << "./animation/" << std::to_string(frame) << ".ppm";
+		window.savePPM(filename.str());
+	}
+
+	for (int frame = frames; frame < sectionTwo; frame++) {
+		frames = frame + 1;
+		window.clearPixels();
+		raster(triangles, textures, cam, window);
+		window.renderFrame();
+
+		if (frame < sectionOne + (sectionTwo - sectionOne) / 2) {
+			cam.position += cam.moveSpeed * glm::vec3(0, 0, 2);
+			cam.rotation = rotateV(glm::vec3(0, 0, -1), degToRad(cam.altLookSpeed)) * cam.rotation;
+		} else {
+			cam.position += cam.moveSpeed * glm::vec3(0, 0, -2);
+			cam.rotation = rotateV(glm::vec3(0, 0, -1), degToRad(cam.altLookSpeed)) * cam.rotation;
+		}
+
+		glm::vec3 target = {0, 0, 0};
+		lookAt(target, cam);
+
+		std::stringstream filename;
+		filename << "./animation/" << std::to_string(frame) << ".ppm";
+		window.savePPM(filename.str());
+	}
+
+	// disable ceiling light brightness
+	triangles.at(8).material.emissive = false;
+	triangles.at(9).material.emissive = false;
+	lights.at(0).intensity = 0.0f;
+
+	for (int frame = frames; frame < sectionThree; frame++) {
+		frames = frame + 1;
+		window.clearPixels();
+		raytrace(triangles, textures, normalMaps, lights, cam, window);
+		window.renderFrame();
+
+		if (frame < sectionThree + (sectionThree - sectionTwo) / 2) {
+			lights.at(0).position = lights.at(0).position * rotateY(degToRad(360.0f / float(sectionOne)));
+			lights.at(0).intensity += 10.0f / (float(sectionThree - sectionTwo) / 2.0f);
+		} else {
+			lights.at(0).position += 20 / float(sectionThree - sectionTwo) * glm::vec3(-0.1, 0, -0.1);
+			lights.at(0).intensity -= 10.0f / (float(sectionThree - sectionTwo) / 2.0f);
+		}
+
+		std::stringstream filename;
+		filename << "./animation/" << std::to_string(frame) << ".ppm";
+		window.savePPM(filename.str());
+	}
+
+	// enable ceiling light brightness
+	triangles.at(8).material.emissive = true;
+	triangles.at(9).material.emissive = true;
+	lights.at(0) = ceiling;
+	lights.at(0).intensity = 0.0f;
+	cam.shadingMode = GOURAUD;
+	brightnessFunction = gouraudBrightness;
+
+	for (int frame = frames; frame < sectionFour; frame++) {
+		frames = frame + 1;
+		window.clearPixels();
+		raytrace(triangles, textures, normalMaps, lights, cam, window);
+		window.renderFrame();
+
+		if (frame < sectionThree + 30) {
+			lights.at(0).intensity += 20.0f / 30.0f;
+		}
+
+		std::stringstream filename;
+		filename << "./animation/" << std::to_string(frame) << ".ppm";
+		window.savePPM(filename.str());
+	}
+
+	cam.shadingMode = PHONG;
+	brightnessFunction = flatBrightness;
+
+	scene = readObj(SCENE_ONE);
+	triangles = std::get<0>(scene);
+	textures = std::get<1>(scene);
+	normalMaps = std::get<2>(scene);
+
+	for (int frame = frames; frame < sectionFive; frame++) {
+		frames = frame + 1;
+		window.clearPixels();
+		raytrace(triangles, textures, normalMaps, lights, cam, window);
+		window.renderFrame();
+
+		std::stringstream filename;
+		filename << "./animation/" << std::to_string(frame) << ".ppm";
+		window.savePPM(filename.str());
+	}
+}
+
+
 [[noreturn]] int main(int argc, char *argv[]) {
 	// seed rand
 	srand(time(nullptr));
@@ -983,7 +1052,7 @@ std::tuple<std::vector<ModelTriangle>, std::map<std::string, TextureMap>, std::m
 	std::map<std::string, TextureMap> textures, normalMaps;
 
 	// read obj and mtl files and store
-	auto scene = readObj(SCENE_OBJ);
+	auto scene = readObj(SCENE_TWO);
 	triangles.insert(triangles.end(), std::get<0>(scene).begin(), std::get<0>(scene).end());
 	textures.insert(std::get<1>(scene).begin(), std::get<1>(scene).end());
 	normalMaps.insert(std::get<2>(scene).begin(), std::get<2>(scene).end());
@@ -991,15 +1060,15 @@ std::tuple<std::vector<ModelTriangle>, std::map<std::string, TextureMap>, std::m
 	// INITIALISE LIGHTS AND CAMERA
 	std::vector<Light> lights;
 
-	Camera camera = Camera();
+	Camera camera = Camera(glm::vec3(0, 0, 3), 2.0f);
 	Light ceiling = Light(AREA, 20.0f);
-	Light pointLight = Light(POINT, glm::vec3(1, 0, 3), 10.0f);
+	Light pointLight = Light(POINT, glm::vec3(0.0, 0.5, 0.5), 10.0f);
 
-	lights.insert(lights.end(), {ceiling});
+	lights.insert(lights.end(), {pointLight});
 	brightnessFunction = flatBrightness;
 
 	// UNCOMMENT FOR ANIMATION
-	animate(triangles, textures, normalMaps, lights, camera, window);
+	//animate(window);
 
 	time_t start = time(nullptr);
 	time_t elapsed;

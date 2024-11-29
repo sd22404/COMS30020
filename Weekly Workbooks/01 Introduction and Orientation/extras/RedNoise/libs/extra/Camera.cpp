@@ -4,11 +4,10 @@ Camera::Camera() = default;
 
 Camera::Camera(float focalLength) : focalLength(focalLength) {}
 
-Camera::Camera(glm::vec3 position, glm::mat3 rotation) :
+Camera::Camera(glm::vec3 position, float focalLength) :
     defaultPosition(position),
-    defaultRotation(rotation),
     position(defaultPosition),
-    rotation(defaultRotation) {}
+    focalLength(focalLength) {}
 
 Camera::Camera(glm::vec3 position, glm::mat3 rotation, float focalLength) :
     defaultPosition(position),

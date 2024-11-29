@@ -28,7 +28,7 @@ struct Camera {
 
     Camera();
     explicit Camera(float focalLength);
-    Camera(glm::vec3 position, glm::mat3 rotation);
+    Camera(glm::vec3 position, float focalLength);
     Camera(glm::vec3 position, glm::mat3 rotation, float focalLength);
 
     friend std::ostream &operator<<(std::ostream &os, const Camera &cam);
