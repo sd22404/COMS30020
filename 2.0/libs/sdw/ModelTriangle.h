@@ -3,16 +3,23 @@
 #include <glm/glm.hpp>
 #include <string>
 #include <array>
-#include "Colour.h"
 #include "TexturePoint.h"
+#include "../extra/Vertex.h"
+#include "../extra/Material.h"
 
 struct ModelTriangle {
-	std::array<glm::vec3, 3> vertices{};
+	std::array<Vertex, 3> vertices{};
 	std::array<TexturePoint, 3> texturePoints{};
-	Colour colour{};
+	Material material{};
 	glm::vec3 normal{};
+	std::string texture;
+	std::string normalMap;
+
+	Vertex &v0() { return vertices[0]; }
+	Vertex &v1() { return vertices[1]; }
+	Vertex &v2() { return vertices[2]; }
 
 	ModelTriangle();
-	ModelTriangle(const glm::vec3 &v0, const glm::vec3 &v1, const glm::vec3 &v2, Colour trigColour);
+	ModelTriangle(const Vertex &v0, const Vertex &v1, const Vertex &v2, Material &mat);
 	friend std::ostream &operator<<(std::ostream &os, const ModelTriangle &triangle);
 };
