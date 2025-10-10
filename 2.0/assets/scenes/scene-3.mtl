@@ -1,0 +1,35 @@
+newmtl Blue
+Kd 0.000000 0.000000 1.000000
+
+newmtl Cyan
+Kd 0.000000 1.000000 1.000000
+
+newmtl Green
+Kd 0.000000 1.000000 0.000000
+
+newmtl Leopard
+map_Kd leopard.ppm
+
+newmtl Light
+Kd 1.000000 1.000000 1.000000
+Ke 1.000000 1.000000 1.000000
+
+newmtl Magenta
+Kd 1.000000 0.000000 1.000000
+
+newmtl Mirror
+Kd 0.000000 0.000000 0.000000
+Ks 1.000000 1.000000 1.000000
+
+newmtl Red
+Kd 1.000000 0.000000 0.000000
+
+newmtl Tiles
+map_Kd ceramic.ppm
+map_bump ceramic-normal.ppm
+
+newmtl White
+Kd 1.000000 1.000000 1.000000
+
+newmtl Yellow
+Kd 1.000000 1.000000 0.000000

@@ -1,0 +1,19 @@
+newmtl Mirror
+Kd 1.000000 0.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+
+newmtl Red
+Kd 1.000000 0.000000 0.000000
+
+newmtl Grey
+Kd 0.700000 0.700000 0.700000
+
+newmtl White
+Kd 1.000000 1.000000 1.000000
+
+newmtl Leopard
+map_Kd leopard.ppm
+
+newmtl Light
+Kd 1.000000 1.000000 1.000000
+Ke 1.000000 1.000000 1.000000
