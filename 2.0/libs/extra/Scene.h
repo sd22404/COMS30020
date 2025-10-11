@@ -11,12 +11,13 @@
 
 class Scene {
 public:
+    Scene(const std::string &objFilename, float modelScale = 0.35);
     std::vector<ModelTriangle> triangles;
     std::unordered_map<std::string, Material> materials;
     std::unordered_map<std::string, TextureMap> textures;
     std::unordered_map<std::string, TextureMap> normalMaps;
-
+private:
     void readObj(const std::string &objFilename, float modelScale);
     void readMtl(const std::string &filename);
-    Scene(const std::string &objFilename, float modelScale = 0.35);
+    static glm::vec3 vertexNormal(Vertex &vertex, std::vector<ModelTriangle> &triangles);
 };

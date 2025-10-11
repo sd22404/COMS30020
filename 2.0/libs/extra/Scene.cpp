@@ -1,6 +1,6 @@
 #include "Scene.h"
 
-glm::vec3 vertexNormal(Vertex &vertex, std::vector<ModelTriangle> &triangles) {
+glm::vec3 Scene::vertexNormal(Vertex &vertex, std::vector<ModelTriangle> &triangles) {
 	// for each vertex on triangles in the model, if it's the same as given vertex, add to list
 	glm::vec3 total;
 	for (auto &triangle : triangles) {

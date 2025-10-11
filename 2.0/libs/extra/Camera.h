@@ -1,8 +1,8 @@
 #pragma once
 
 #include "CanvasPoint.h"
-#include <DrawingWindow.h>
 #include <glm/glm.hpp>
+#include "glm/gtx/string_cast.hpp"
 
 enum Direction {
     UP,
@@ -15,14 +15,22 @@ enum Direction {
 
 class Camera {
 public:
-    glm::vec3 position = glm::vec3(0, 0, 2);
-    glm::vec3 rotation = glm::vec3(0, 0, 0);
-    float focalLength = 1.0f;
-    float speed = 0.1f;
+    glm::vec3 position = glm::vec3(0, 0, 4);
+    glm::mat3 rotation = glm::mat3(glm::vec3(1, 0, 0), glm::vec3(0, 1, 0), glm::vec3(0, 0, 1));
+    float focalLength = 2.0f;
+    float speed = 0.2f;
     int width;
     int height;
+    bool orbiting = false;
 
     Camera(int width, int height) : width(width), height(height) {};
     CanvasPoint projectVertex(const glm::vec3 &vertex, float canvasScale);
+    void reset();
+    void lookAt(glm::vec3 target);
     void move(Direction dir);
+    void toggleOrbit();
+    void orbit();
+
+    static glm::mat3 rotateY(float angle);
+    static float degToRad(float deg);
 };

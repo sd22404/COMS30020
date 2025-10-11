@@ -1,5 +1,10 @@
 #include "CanvasPoint.h"
 
+bool CanvasPoint::isOffScreen(float width, float height) {
+	if (x >= width || x < 0 || y >= height || y < 0 || depth < 0) return true;
+	return false;
+}
+
 CanvasPoint::CanvasPoint() :
 		texturePoint(-1, -1) {}
 

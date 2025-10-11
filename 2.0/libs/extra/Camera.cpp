@@ -2,15 +2,31 @@
 
 CanvasPoint Camera::projectVertex(const glm::vec3 &vertex, float canvasScale) {
     // vertex in terms of camera coordinates
-	glm::vec3 vertexFromCamera = vertex - position;
-	// adjust by cameraOrientation
-	glm::vec3 adjustedPos = vertexFromCamera * rotation;
-	float x = adjustedPos.x; float y = adjustedPos.y; float z = -adjustedPos.z; // invert z so that depth is positive
+	glm::vec3 finalPos = (vertex - position) * rotation;
 	// transform onto image plane
-	float u = canvasScale * focalLength * x / abs(z) + width / 2.0f; // abs z to keep points that are behind camera
-	float v = -canvasScale * focalLength * y / abs(z) + height / 2.0f;
-	return {u, v, 1/z};
+	float u = -canvasScale * focalLength * finalPos.x / finalPos.z + width / 2.0f; // abs z to keep points that are behind camera
+	float v = canvasScale * focalLength * finalPos.y / finalPos.z + height / 2.0f;
+	return {u, v, -1 / finalPos.z};
 };
+
+glm::mat3 Camera::rotateY(float angle) {
+    return {
+        glm::vec3(cos(angle), 0, -sin(angle)),
+        glm::vec3(0, 1, 0),
+        glm::vec3(sin(angle), 0, cos(angle))
+    };
+}
+
+float Camera::degToRad(float deg) {
+    return M_PI * deg / 180;
+}
+
+void Camera::lookAt(glm::vec3 target) {
+    glm::vec3 forward = normalize(position - target);
+    glm::vec3 right = normalize(cross(glm::vec3(0, 1, 0), forward));
+    glm::vec3 up = normalize(cross(forward, right));
+    rotation = glm::mat3(right, up, forward);
+}
 
 void Camera::move(Direction dir) {
     switch (dir) {
@@ -36,3 +52,16 @@ void Camera::move(Direction dir) {
             break;
     }
 };
+
+void Camera::reset() {
+    position = glm::vec3(0, 0, 2);
+    rotation = glm::mat3(glm::vec3(1, 0, 0), glm::vec3(0, 1, 0), glm::vec3(0, 0, 1));
+}
+
+void Camera::toggleOrbit() { orbiting = !orbiting; }
+
+void Camera::orbit() {
+    if (!orbiting) return;
+    position = position * rotateY(degToRad(speed));
+    lookAt({0, 0, 0});
+}

@@ -20,10 +20,16 @@ private:
     RenderMode mode;
     Scene &scene;
     Camera &camera;
+    std::vector<std::vector<float>> depthBuffer;
 public:
-    Renderer(DrawingWindow &window, Scene &scene, Camera &cam) : window(window), mode(WIREFRAME), scene(scene), camera(cam) {}
+    Renderer(DrawingWindow &window, Scene &scene, Camera &cam) :
+        window(window), mode(WIREFRAME), scene(scene), camera(cam), depthBuffer(std::vector<std::vector<float>>(window.height, std::vector<float>(window.width, 0))) {}
+    void setMode(RenderMode rMode) { mode = rMode; }
     void draw(Scene &scene);
-    void drawLine(CanvasPoint p0, CanvasPoint p1, glm::vec3 colour);
-    void drawTriangle(CanvasTriangle triangle, glm::vec3 colour);
+private:
+    void drawLine(CanvasPoint &p0, CanvasPoint &p1, uint32_t &colour);
+    void drawTriangle(CanvasTriangle &triangle, uint32_t &colour);
+    void fillTriangle(CanvasTriangle &triangle, uint32_t &colour);
     void wireframe();
+    void raster();
 };
