@@ -7,7 +7,18 @@ CanvasPoint Camera::projectVertex(const glm::vec3 &vertex, float canvasScale) {
 	float u = -canvasScale * focalLength * finalPos.x / finalPos.z + width / 2.0f; // abs z to keep points that are behind camera
 	float v = canvasScale * focalLength * finalPos.y / finalPos.z + height / 2.0f;
 	return {u, v, -1 / finalPos.z};
-};
+}
+
+glm::vec3 Camera::projectRay(float x, float y, float canvasScale) {
+    // convert from SDL coordinate system into 3D/model coordinate system
+    x = x - width / 2.0f;
+    y = -y + height / 2.0f;
+    // generate canvas point in 3D space, adjusted by cameraOrientation
+    glm::vec3 canvasPoint3D = position + glm::vec3(x, y, -(focalLength * canvasScale)) * inverse(rotation);
+    // subtract cameraPosition and normalise to get ray direction
+    glm::vec3 ray = normalize(canvasPoint3D - position);
+    return ray;
+}
 
 glm::mat3 Camera::rotateY(float angle) {
     return {
@@ -51,7 +62,7 @@ void Camera::move(Direction dir) {
         default:
             break;
     }
-};
+}
 
 void Camera::reset() {
     position = glm::vec3(0, 0, 2);
@@ -64,4 +75,8 @@ void Camera::orbit() {
     if (!orbiting) return;
     position = position * rotateY(degToRad(speed));
     lookAt({0, 0, 0});
+}
+
+void traceRay() {
+    // to be implemented
 }

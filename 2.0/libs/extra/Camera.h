@@ -4,17 +4,17 @@
 #include <glm/glm.hpp>
 #include "glm/gtx/string_cast.hpp"
 
-enum Direction {
-    UP,
-    DOWN,
-    LEFT,
-    RIGHT,
-    FORWARD,
-    BACKWARD
-};
-
 class Camera {
 public:
+    enum Direction {
+        UP,
+        DOWN,
+        LEFT,
+        RIGHT,
+        FORWARD,
+        BACKWARD
+    };
+
     glm::vec3 position = glm::vec3(0, 0, 4);
     glm::mat3 rotation = glm::mat3(glm::vec3(1, 0, 0), glm::vec3(0, 1, 0), glm::vec3(0, 0, 1));
     float focalLength = 2.0f;
@@ -25,11 +25,13 @@ public:
 
     Camera(int width, int height) : width(width), height(height) {};
     CanvasPoint projectVertex(const glm::vec3 &vertex, float canvasScale);
+    glm::vec3 projectRay(float x, float y, float canvasScale);
     void reset();
     void lookAt(glm::vec3 target);
     void move(Direction dir);
     void toggleOrbit();
     void orbit();
+    void traceRay();
 
     static glm::mat3 rotateY(float angle);
     static float degToRad(float deg);

@@ -14,6 +14,7 @@ struct CanvasTriangle {
 	CanvasPoint &v2();
 	CanvasPoint operator[](size_t i) const;
 	CanvasPoint &operator[](size_t i);
+	bool isOffScreen(float width, float height);
 	friend std::ostream &operator<<(std::ostream &os, const CanvasTriangle &triangle);
 };
 

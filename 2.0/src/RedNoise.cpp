@@ -10,15 +10,15 @@
 
 void handleEvent(SDL_Event event, DrawingWindow &window, Camera &cam, Renderer &r) {
 	if (event.type == SDL_KEYDOWN) {
-		if (event.key.keysym.sym == SDLK_w) cam.move(FORWARD);
-		if (event.key.keysym.sym == SDLK_s) cam.move(BACKWARD);
-		if (event.key.keysym.sym == SDLK_a) cam.move(LEFT);
-		if (event.key.keysym.sym == SDLK_d) cam.move(RIGHT);
-		if (event.key.keysym.sym == SDLK_q) cam.move(DOWN);
-		if (event.key.keysym.sym == SDLK_e) cam.move(UP);
-		if (event.key.keysym.sym == SDLK_1) r.setMode(WIREFRAME);
-		if (event.key.keysym.sym == SDLK_2) r.setMode(RASTERISED);
-		if (event.key.keysym.sym == SDLK_3) r.setMode(RAYTRACED);
+		if (event.key.keysym.sym == SDLK_w) cam.move(Camera::FORWARD);
+		if (event.key.keysym.sym == SDLK_s) cam.move(Camera::BACKWARD);
+		if (event.key.keysym.sym == SDLK_a) cam.move(Camera::LEFT);
+		if (event.key.keysym.sym == SDLK_d) cam.move(Camera::RIGHT);
+		if (event.key.keysym.sym == SDLK_q) cam.move(Camera::DOWN);
+		if (event.key.keysym.sym == SDLK_e) cam.move(Camera::UP);
+		if (event.key.keysym.sym == SDLK_1) r.setMode(Renderer::WIREFRAME);
+		if (event.key.keysym.sym == SDLK_2) r.setMode(Renderer::RASTERISED);
+		if (event.key.keysym.sym == SDLK_3) r.setMode(Renderer::RAYTRACED);
 		if (event.key.keysym.sym == SDLK_SPACE) cam.reset();
 		if (event.key.keysym.sym == SDLK_LCTRL) cam.toggleOrbit();
 	} else if (event.type == SDL_MOUSEBUTTONDOWN) {
@@ -31,8 +31,8 @@ void handleEvent(SDL_Event event, DrawingWindow &window, Camera &cam, Renderer &
 	DrawingWindow window = DrawingWindow(WIDTH, HEIGHT, false);
 	SDL_Event event;
 	Camera cam = Camera(WIDTH, HEIGHT);
-	Scene scene = Scene(SCENE);
-	Renderer r = Renderer(window, scene, cam);
+	Scene scene = Scene(SCENE, cam);
+	Renderer r = Renderer(window);
 	while (true) {
 		// We MUST poll for events - otherwise the window will freeze !
 		if (window.pollForInputEvents(event)) handleEvent(event, window, cam, r);

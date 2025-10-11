@@ -29,14 +29,17 @@ include_directories(libs/extra)
 add_executable(RedNoise
         libs/sdw/CanvasPoint.cpp
         libs/sdw/CanvasTriangle.cpp
-        libs/sdw/Material.cpp
         libs/sdw/DrawingWindow.cpp
         libs/sdw/ModelTriangle.cpp
         libs/sdw/RayTriangleIntersection.cpp
         libs/sdw/TextureMap.cpp
         libs/sdw/TexturePoint.cpp
         libs/sdw/Utils.cpp
-        libs/extra/*.cpp
+        libs/extra/Camera.cpp
+        libs/extra/Material.cpp
+        libs/extra/Renderer.cpp
+        libs/extra/Scene.cpp
+        libs/extra/Vertex.cpp
         src/RedNoise.cpp)
 
 if (MSVC)

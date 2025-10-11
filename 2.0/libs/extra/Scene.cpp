@@ -17,12 +17,43 @@ glm::vec3 Scene::vertexNormal(Vertex &vertex, std::vector<ModelTriangle> &triang
 	return total;
 }
 
-Scene::Scene(const std::string &objFilename, float modelScale) {
-    triangles = std::vector<ModelTriangle>();
-    materials = std::unordered_map<std::string, Material>();
-    textures = std::unordered_map<std::string, TextureMap>();
-    normalMaps = std::unordered_map<std::string, TextureMap>();
-    readObj(objFilename, modelScale);
+Scene::Scene(const std::string &objFilename, Camera &camera, float modelScale) : cam(camera) {
+	readObj(objFilename, modelScale);
+	auto it = textures.find("background");
+	background = (it != textures.end()) ? &it->second : nullptr;
+}
+
+uint32_t Scene::backgroundColour(float x, float y) {
+	if (background == nullptr) return 0;
+	return background->pixels.at((y * background->width) + x);
+}
+
+RayTriangleIntersection Scene::closestIntersection(glm::vec3 start, glm::vec3 dir, float minDist, float maxDist) {
+	float inverseClosestDistance = 0;
+	int index = -1;
+	RayTriangleIntersection intersection;
+	intersection.triangleIndex = index;
+	for (auto &triangle : triangles) {
+		index++;
+		// calculate edge vectors
+		glm::vec3 e0 = triangle.v1().position - triangle.v0().position;
+		glm::vec3 e1 = triangle.v2().position - triangle.v0().position;
+		// calculate vector from startPoint to triangle
+		glm::vec3 SPVector = start - triangle.v0().position;
+		// generate direction/edge matrix
+		glm::mat3 DEMatrix(-dir, e0, e1);
+		// find possible solution in [t, u, v]
+		glm::vec3 possibleSolution = inverse(DEMatrix) * SPVector;
+		float t = possibleSolution.x, u = possibleSolution.y, v = possibleSolution.z;
+		// if closer than previously found solution, and within the bounds of the triangle, set new closest intersection
+		if (t > minDist && t < maxDist && 1 / t > inverseClosestDistance && u >= 0 && u <= 1.0 && v >= 0 && v <= 1.0 && (u + v) <= 1.0) {
+			intersection = RayTriangleIntersection(start + t * dir, t, triangle, index);
+			intersection.u = u; intersection.v = v;
+			inverseClosestDistance = 1 / t;
+		}
+	}
+
+	return intersection;
 }
 
 void Scene::readObj(const std::string &filename, float modelScale) {
