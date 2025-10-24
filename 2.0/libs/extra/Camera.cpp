@@ -4,7 +4,7 @@ CanvasPoint Camera::projectVertex(const glm::vec3 &vertex, float canvasScale) {
     // vertex in terms of camera coordinates
 	glm::vec3 finalPos = (vertex - position) * rotation;
 	// transform onto image plane
-	float u = -canvasScale * focalLength * finalPos.x / finalPos.z + width / 2.0f; // abs z to keep points that are behind camera
+	float u = -canvasScale * focalLength * finalPos.x / finalPos.z + width / 2.0f;
 	float v = canvasScale * focalLength * finalPos.y / finalPos.z + height / 2.0f;
 	return {u, v, -1 / finalPos.z};
 }
@@ -65,7 +65,7 @@ void Camera::move(Direction dir) {
 }
 
 void Camera::reset() {
-    position = glm::vec3(0, 0, 2);
+    position = startPosition;
     rotation = glm::mat3(glm::vec3(1, 0, 0), glm::vec3(0, 1, 0), glm::vec3(0, 0, 1));
 }
 
@@ -73,7 +73,7 @@ void Camera::toggleOrbit() { orbiting = !orbiting; }
 
 void Camera::orbit() {
     if (!orbiting) return;
-    position = position * rotateY(degToRad(speed));
+    position = position * rotateY(degToRad(speed * 10.0f));
     lookAt({0, 0, 0});
 }
 

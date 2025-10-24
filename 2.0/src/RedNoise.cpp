@@ -6,7 +6,7 @@
 #define WIDTH 640
 #define HEIGHT 480
 
-#define SCENE std::string("./assets/scenes/scene-2.obj")
+#define SCENE std::string("./assets/default/cornell-box.obj")
 
 void handleEvent(SDL_Event event, DrawingWindow &window, Camera &cam, Renderer &r) {
 	if (event.type == SDL_KEYDOWN) {
@@ -30,7 +30,7 @@ void handleEvent(SDL_Event event, DrawingWindow &window, Camera &cam, Renderer &
 [[noreturn]] int main(int argc, char *argv[]) {
 	DrawingWindow window = DrawingWindow(WIDTH, HEIGHT, false);
 	SDL_Event event;
-	Camera cam = Camera(WIDTH, HEIGHT);
+	Camera cam = Camera(WIDTH, HEIGHT, 2.0f, glm::vec3(0, 0, 4));
 	Scene scene = Scene(SCENE, cam);
 	Renderer r = Renderer(window);
 	while (true) {

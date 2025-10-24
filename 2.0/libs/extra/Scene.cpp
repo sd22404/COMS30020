@@ -101,8 +101,8 @@ void Scene::readObj(const std::string &filename, float modelScale) {
 			std::vector<std::string> vIndices, tIndices;
 			for (size_t i = 1; i < splitln.size(); i++) {
 				std::vector<std::string> vt = split(splitln[i], '/');
-				vIndices.push_back(vt[0]);
-				if (vt.size() > 1) tIndices.push_back(vt[1]);
+				if (!vt[0].empty()) vIndices.push_back(vt[0]);
+				if (!vt[1].empty()) tIndices.push_back(vt[1]);
 			}
 			// convert indices to ints and zero-index (ignoring first char 'f')
 			int iv0 = int(strtol(vIndices[0].c_str(), nullptr, 10) - 1);
@@ -112,7 +112,7 @@ void Scene::readObj(const std::string &filename, float modelScale) {
 			Vertex v0 = Vertex(vertices[iv0]), v1 = Vertex(vertices[iv1]), v2 = Vertex(vertices[iv2]);
 			v0.index = iv0; v1.index = iv1; v2.index = iv2;
 			// set texture points if used
-			if (!tIndices.empty()) {
+			if (tIndices.size() >= 3) {
 				int it0 = int(strtol(tIndices[0].c_str(), nullptr, 10) - 1);
 				int it1 = int(strtol(tIndices[1].c_str(), nullptr, 10) - 1);
 				int it2 = int(strtol(tIndices[2].c_str(), nullptr, 10) - 1);

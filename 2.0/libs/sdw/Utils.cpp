@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <sstream>
 #include "Utils.h"
+#include "CanvasPoint.h"
 
 std::vector<std::string> split(const std::string &line, char delimiter) {
 	auto haystack = line;
@@ -31,4 +32,8 @@ glm::vec3 convertToBarycentricCoordinates(glm::vec2 v0, glm::vec2 v1, glm::vec2 
     float v = (d00 * d21 - d01 * d20) / denominator;
     float w = 1.0f - u - v;
     return glm::vec3(u,v,w);
+}
+
+float edgeFunction(const CanvasPoint &v0, const CanvasPoint &v1, const CanvasPoint &v2) {
+    return (v2.x - v0.x) * (v1.y - v0.y) - (v2.y - v0.y) * (v1.x - v0.x);
 }

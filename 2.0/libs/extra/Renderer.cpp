@@ -45,26 +45,29 @@ void Renderer::drawTriangle(CanvasTriangle &triangle, uint32_t &colour) {
 void Renderer::fillTriangle(CanvasTriangle &triangle, uint32_t &colour) {
 	if (triangle.isOffScreen(window.width, window.height)) return;
 
-	float maxX = glm::max(glm::max(triangle.v0().x, triangle.v1().x), triangle.v2().x);
-	float maxY = glm::max(glm::max(triangle.v0().y, triangle.v1().y), triangle.v2().y);
-	float minX = glm::min(glm::min(triangle.v0().x, triangle.v1().x), triangle.v2().x);
-	float minY = glm::min(glm::min(triangle.v0().y, triangle.v1().y), triangle.v2().y);
+	float area = edgeFunction(triangle.v0(), triangle.v1(), triangle.v2());
+
+	int maxX = ceil(std::max({triangle.v0().x, triangle.v1().x, triangle.v2().x}));
+	int maxY = ceil(std::max({triangle.v0().y, triangle.v1().y, triangle.v2().y}));
+	int minX = floor(std::min({triangle.v0().x, triangle.v1().x, triangle.v2().x}));
+	int minY = floor(std::min({triangle.v0().y, triangle.v1().y, triangle.v2().y}));
 	// fill in triangle
-	for (float x = minX; x < maxX; x++) {
-		for (float y = minY; y < maxY; y++) {
-			glm::vec3 bCoords = convertToBarycentricCoordinates(
-				{triangle.v0().x, triangle.v0().y},
-				{triangle.v1().x, triangle.v1().y},
-				{triangle.v2().x, triangle.v2().y},
-				{x, y});
-			float depth = bCoords.x * triangle.v1().depth + bCoords.y * triangle.v2().depth + bCoords.z * triangle.v0().depth;
-			auto point = CanvasPoint(x, y, depth);
-			if (!point.isOffScreen(window.width, window.height) &&
-				bCoords.x >= 0 && bCoords.y >= 0 && bCoords.z >= 0 &&
-				depth > depthBuffer[floor(y)][floor(x)] &&
-				depth > 0) {
-					window.setPixelColour(floor(x), floor(y), colour);
-					depthBuffer[floor(y)][floor(x)] = depth;
+	for (int x = minX; x < maxX; x++) {
+		for (int y = minY; y < maxY; y++) {
+
+			CanvasPoint p = CanvasPoint(x, y);
+
+			const float u = edgeFunction(triangle.v1(), triangle.v2(), p) / area;
+            const float v = edgeFunction(triangle.v2(), triangle.v0(), p) / area;
+            const float w = 1.0f - u - v;
+
+			float depth = u * triangle.v0().depth + v * triangle.v1().depth + w * triangle.v2().depth;
+			p.depth = depth;
+			if (!p.isOffScreen(window.width, window.height) &&
+				u >= 0 && v >= 0 && w >= 0 &&
+				depth > depthBuffer[y][x]) {
+					window.setPixelColour(x, y, colour);
+					depthBuffer[y][x] = depth;
 			}
 		}
 	}
@@ -87,7 +90,7 @@ void Renderer::wireframe(Scene &scene) {
 }
 
 void Renderer::raster(Scene &scene) {
-	for(auto& row : depthBuffer) std::fill(row.begin(), row.end(), 0);
+	for(auto& row : depthBuffer) std::fill(row.begin(), row.end(), 0.0f);
 	for (auto &triangle : scene.triangles) {
 		// for each model triangle, project vertices onto canvas and draw resulting triangle
 		CanvasPoint v0 = scene.cam.projectVertex(triangle.v0().position, window.height / 2.0f);
@@ -106,9 +109,9 @@ void Renderer::raster(Scene &scene) {
 void Renderer::raytrace(Scene &scene) {
 	for (float y = 0; y < window.height; y++) {
 		for (float x = 0; x < window.width; x++) {
-			glm::vec3 dir = scene.cam.projectRay(x, y, window.height / 2.0f);
-			auto intersection = scene.closestIntersection(scene.cam.position, dir);
-			auto triangle = intersection.intersectedTriangle;
+			const glm::vec3 &dir = scene.cam.projectRay(x, y, window.height / 2.0f);
+			const RayTriangleIntersection &intersection = scene.closestIntersection(scene.cam.position, dir);
+			const ModelTriangle &triangle = intersection.intersectedTriangle;
 			bool miss = intersection.triangleIndex == -1;
 			uint32_t colour = 0;
 			if (miss) colour = scene.backgroundColour(x, y);

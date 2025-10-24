@@ -6,6 +6,8 @@
 #include <CanvasPoint.h>
 #include <CanvasTriangle.h>
 #include <CanvasLine.h>
+#include <Utils.h>
+#include <algorithm>
 
 class Renderer {
 public:
@@ -20,7 +22,7 @@ private:
     std::vector<std::vector<float>> depthBuffer;
 public:
     Renderer(DrawingWindow &window) :
-        window(window), mode(WIREFRAME), depthBuffer(std::vector<std::vector<float>>(window.height, std::vector<float>(window.width, 0))) {}
+        window(window), mode(WIREFRAME), depthBuffer(std::vector<std::vector<float>>(window.height, std::vector<float>(window.width, 0.0f))) {}
     void setMode(RenderMode rMode) { mode = rMode; }
     void draw(Scene &scene);
 private:
