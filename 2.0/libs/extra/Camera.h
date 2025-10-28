@@ -26,14 +26,13 @@ public:
     float speed = 0.2f;
 
     Camera(int width, int height, float focalLength, glm::vec3 position) : width(width), height(height), startPosition(position), position(position), focalLength(focalLength) {};
-    CanvasPoint projectVertex(const glm::vec3 &vertex, float canvasScale);
-    glm::vec3 projectRay(float x, float y, float canvasScale);
+    CanvasPoint projectVertex(const glm::vec3 &vertex, float &canvasScale);
+    glm::vec3 projectRay(int &x, int &y, float &canvasScale);
     void reset();
     void lookAt(glm::vec3 target);
     void move(Direction dir);
     void toggleOrbit();
     void orbit();
-    void traceRay();
 
     static glm::mat3 rotateY(float angle);
     static float degToRad(float deg);

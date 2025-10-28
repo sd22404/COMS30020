@@ -31,7 +31,9 @@ void handleEvent(SDL_Event event, DrawingWindow &window, Camera &cam, Renderer &
 	DrawingWindow window = DrawingWindow(WIDTH, HEIGHT, false);
 	SDL_Event event;
 	Camera cam = Camera(WIDTH, HEIGHT, 2.0f, glm::vec3(0, 0, 4));
-	Scene scene = Scene(SCENE, cam);
+	Light light = Light(glm::vec3(0, 0.8f, 0), 1.0f);
+	std::vector<Light> lights = {light};
+	Scene scene = Scene(SCENE, cam, lights);
 	Renderer r = Renderer(window);
 	while (true) {
 		// We MUST poll for events - otherwise the window will freeze !

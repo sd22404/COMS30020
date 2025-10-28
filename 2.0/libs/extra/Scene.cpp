@@ -17,10 +17,30 @@ glm::vec3 Scene::vertexNormal(Vertex &vertex, std::vector<ModelTriangle> &triang
 	return total;
 }
 
-Scene::Scene(const std::string &objFilename, Camera &camera, float modelScale) : cam(camera) {
+Scene::Scene(const std::string &objFilename, Camera &camera, std::vector<Light> &lights, float modelScale) : lights(lights), cam(camera) {
 	readObj(objFilename, modelScale);
 	auto it = textures.find("background");
 	background = (it != textures.end()) ? &it->second : nullptr;
+}
+
+uint32_t Scene::traceRay(glm::vec3 dir) {
+	auto intersection = closestIntersection(cam.position, dir);
+	bool miss = intersection.triangleIndex == -1;
+	float brightness = 1.0f;
+	if (miss) return backgroundColour(0, 0);
+	const ModelTriangle &triangle = intersection.intersectedTriangle;
+
+	glm::vec3 toLight = lights.at(0).position - intersection.intersectionPoint;
+	float distToLight = glm::length(toLight);
+	glm::vec3 shadowDir = normalize(toLight);
+	auto shadow = closestIntersection(intersection.intersectionPoint + shadowDir * MIN_DIST, shadowDir, MIN_DIST, distToLight - MIN_DIST);
+	bool inShadow = shadow.triangleIndex != -1;
+	if (inShadow) brightness = 0.2f;
+
+	return (255 << 24) + (
+		   (int(brightness * triangle.material.colour.r * 255) << 16) +
+		   (int(brightness * triangle.material.colour.g * 255) << 8) +
+		   (int(brightness * triangle.material.colour.b * 255)));
 }
 
 uint32_t Scene::backgroundColour(float x, float y) {
@@ -55,6 +75,15 @@ RayTriangleIntersection Scene::closestIntersection(glm::vec3 start, glm::vec3 di
 
 	return intersection;
 }
+
+CanvasPoint Scene::projectVertex(const glm::vec3 &vertex, float canvasScale) {
+	return cam.projectVertex(vertex, canvasScale);
+}
+
+glm::vec3 Scene::projectRay(int &x, int &y, float canvasScale) {
+	return cam.projectRay(x, y, canvasScale);
+}
+
 
 void Scene::readObj(const std::string &filename, float modelScale) {
 	std::vector<glm::vec3> vertices;

@@ -76,9 +76,9 @@ void Renderer::fillTriangle(CanvasTriangle &triangle, uint32_t &colour) {
 void Renderer::wireframe(Scene &scene) {
     for (auto &triangle : scene.triangles) {
 		// for each model triangle, project vertices onto canvas and draw resulting triangle
-		CanvasPoint v0 = scene.cam.projectVertex(triangle.v0().position, window.height / 2.0f);
-		CanvasPoint v1 = scene.cam.projectVertex(triangle.v1().position, window.height / 2.0f);
-		CanvasPoint v2 = scene.cam.projectVertex(triangle.v2().position, window.height / 2.0f);
+		CanvasPoint v0 = scene.projectVertex(triangle.v0().position, window.height / 2.0f);
+		CanvasPoint v1 = scene.projectVertex(triangle.v1().position, window.height / 2.0f);
+		CanvasPoint v2 = scene.projectVertex(triangle.v2().position, window.height / 2.0f);
 		CanvasTriangle canvasTriangle = {v0, v1, v2};
     	uint32_t colour =
 			(255 << 24) +
@@ -93,9 +93,9 @@ void Renderer::raster(Scene &scene) {
 	for(auto& row : depthBuffer) std::fill(row.begin(), row.end(), 0.0f);
 	for (auto &triangle : scene.triangles) {
 		// for each model triangle, project vertices onto canvas and draw resulting triangle
-		CanvasPoint v0 = scene.cam.projectVertex(triangle.v0().position, window.height / 2.0f);
-		CanvasPoint v1 = scene.cam.projectVertex(triangle.v1().position, window.height / 2.0f);
-		CanvasPoint v2 = scene.cam.projectVertex(triangle.v2().position, window.height / 2.0f);
+		CanvasPoint v0 = scene.projectVertex(triangle.v0().position, window.height / 2.0f);
+		CanvasPoint v1 = scene.projectVertex(triangle.v1().position, window.height / 2.0f);
+		CanvasPoint v2 = scene.projectVertex(triangle.v2().position, window.height / 2.0f);
 		CanvasTriangle canvasTriangle = {v0, v1, v2};
 		uint32_t colour =
 			(255 << 24) +
@@ -107,20 +107,11 @@ void Renderer::raster(Scene &scene) {
 }
 
 void Renderer::raytrace(Scene &scene) {
-	for (float y = 0; y < window.height; y++) {
-		for (float x = 0; x < window.width; x++) {
-			const glm::vec3 &dir = scene.cam.projectRay(x, y, window.height / 2.0f);
-			const RayTriangleIntersection &intersection = scene.closestIntersection(scene.cam.position, dir);
-			const ModelTriangle &triangle = intersection.intersectedTriangle;
-			bool miss = intersection.triangleIndex == -1;
-			uint32_t colour = 0;
-			if (miss) colour = scene.backgroundColour(x, y);
-			else colour =
-				(255 << 24) +
-				(int(triangle.material.colour.r * 255) << 16) +
-				(int(triangle.material.colour.g * 255) << 8) +
-				(int(triangle.material.colour.b * 255));
-			window.setPixelColour(floor(x), floor(y), colour);
+	for (int y = 0; y < window.height; y++) {
+		for (int x = 0; x < window.width; x++) {
+			glm::vec3 dir = scene.projectRay(x, y, window.height / 2.0f);
+			uint32_t colour = scene.traceRay(dir);
+			window.setPixelColour(x, y, colour);
 		}
 	}
 }

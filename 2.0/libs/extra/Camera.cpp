@@ -1,6 +1,6 @@
 #include "Camera.h"
 
-CanvasPoint Camera::projectVertex(const glm::vec3 &vertex, float canvasScale) {
+CanvasPoint Camera::projectVertex(const glm::vec3 &vertex, float &canvasScale) {
     // vertex in terms of camera coordinates
 	glm::vec3 finalPos = (vertex - position) * rotation;
 	// transform onto image plane
@@ -9,12 +9,12 @@ CanvasPoint Camera::projectVertex(const glm::vec3 &vertex, float canvasScale) {
 	return {u, v, -1 / finalPos.z};
 }
 
-glm::vec3 Camera::projectRay(float x, float y, float canvasScale) {
+glm::vec3 Camera::projectRay(int &x, int &y, float &canvasScale) {
     // convert from SDL coordinate system into 3D/model coordinate system
-    x = x - width / 2.0f;
-    y = -y + height / 2.0f;
+    float sdlx = x - width / 2.0f;
+    float sdlY = -y + height / 2.0f;
     // generate canvas point in 3D space, adjusted by cameraOrientation
-    glm::vec3 canvasPoint3D = position + glm::vec3(x, y, -(focalLength * canvasScale)) * inverse(rotation);
+    glm::vec3 canvasPoint3D = position + glm::vec3(sdlx, sdlY, -(focalLength * canvasScale)) * inverse(rotation);
     // subtract cameraPosition and normalise to get ray direction
     glm::vec3 ray = normalize(canvasPoint3D - position);
     return ray;
@@ -75,8 +75,4 @@ void Camera::orbit() {
     if (!orbiting) return;
     position = position * rotateY(degToRad(speed * 10.0f));
     lookAt({0, 0, 0});
-}
-
-void traceRay() {
-    // to be implemented
 }
