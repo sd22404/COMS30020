@@ -5,7 +5,7 @@
 #define WIDTH 640
 #define HEIGHT 480
 
-#define SCENE std::string("../assets/sphere/sphere.obj")
+#define SCENE std::string("../assets/scenes/scene-2.obj")
 
 void handleEvent(SDL_Event event, DrawingWindow &window, Camera &cam, Renderer &r, Scene &scene) {
 	if (event.type == SDL_KEYDOWN) {

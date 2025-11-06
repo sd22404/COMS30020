@@ -3,7 +3,7 @@
 #include "CanvasPoint.h"
 #include <glm/glm.hpp>
 #include "glm/gtx/string_cast.hpp"
-#include "Enums.h"
+#include "ExtraUtils.h"
 #include "Ray.h"
 
 class Camera {

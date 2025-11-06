@@ -42,7 +42,7 @@ add_executable(RedNoise
         libs/extra/Scene.cpp
         libs/extra/Vertex.cpp
         src/RedNoise.cpp
-        libs/extra/Enums.h
+        libs/extra/ExtraUtils.h
         libs/extra/Ray.h)
 
 if (MSVC)

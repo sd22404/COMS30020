@@ -11,7 +11,7 @@
 #include <unordered_map>
 #include <Utils.h>
 #include "RayTriangleIntersection.h"
-#include "Enums.h"
+#include "ExtraUtils.h"
 #include "Ray.h"
 
 #define MIN_DIST 0.001f
@@ -22,7 +22,7 @@ class Scene {
 public:
     Scene(const std::string &objFilename, std::vector<Light> &lights, float modelScale = 0.35);
     RayTriangleIntersection closestIntersection(Ray &ray, float minDist = MIN_DIST, float maxDist = MAX_DIST);
-    uint32_t backgroundColour(float x, float y);
+    glm::vec3 backgroundColour(float x, float y);
     void moveLight(Direction dir);
     std::vector<ModelTriangle> triangles{};
     std::unordered_map<std::string, Material> materials{};

@@ -82,87 +82,76 @@ void Renderer::fillTriangle(CanvasTriangle &triangle, uint32_t &colour) {
 	}
 }
 
-static float proximityBrightness(const float distToLight, const float intensity) {
-	return intensity / (4 * M_PIf * distToLight * distToLight + 5);
+glm::vec3 Renderer::shade(RayTriangleIntersection &hit, Light &light, glm::vec3 &N, glm::vec3 &V) {
+	ModelTriangle &triangle = hit.intersectedTriangle;
+	const Material &mat = triangle.material;
+	const float u = hit.u, v = hit.v;
+
+	glm::vec3 lightDir = light.position - hit.intersectionPoint;
+	float dist = glm::length(lightDir);
+
+	glm::vec3 L = glm::normalize(lightDir);
+
+	float attenuation = light.intensity / (4 * M_PIf * dist * dist + 1.0f);
+	float diffuse;
+	float specular;
+
+	if (lMode == GOURAUD) {
+		float diff0 = std::max(dot(triangle.v0().normal, L), 0.0f);
+		float diff1 = std::max(dot(triangle.v1().normal, L), 0.0f);
+		float diff2 = std::max(dot(triangle.v2().normal, L), 0.0f);
+		diffuse = (u * diff1 + v * diff2 + (1.0f - u - v) * diff0);
+
+		float spec0 = std::pow(std::max(dot(glm::reflect(-L, triangle.v0().normal), V), 0.0f), mat.shininess);
+		float spec1 = std::pow(std::max(dot(glm::reflect(-L, triangle.v1().normal), V), 0.0f), mat.shininess);
+		float spec2 = std::pow(std::max(dot(glm::reflect(-L, triangle.v2().normal), V), 0.0f), mat.shininess);
+		specular = (u * spec1 + v * spec2 + (1.0f - u - v) * spec0);
+
+		return diffuse * mat.diffuse + specular * mat.specular * light.colour * attenuation;
+	}
+
+	diffuse = std::max(dot(N, L), 0.0f);
+
+	glm::vec3 R = glm::reflect(-L, N);
+	specular = std::pow(std::max(dot(R, V), 0.0f), mat.shininess);
+
+	return diffuse * mat.diffuse + specular * mat.specular * light.colour * attenuation;
 }
 
-static float angularBrightness(const glm::vec3 &normal, const glm::vec3 &toLight) {
-	return dot(normal, normalize(toLight));
-}
-
-static float specularBrightness(const glm::vec3 &normal, const glm::vec3 &toLight, const glm::vec3 &toCam, const float n = 32) {
-	glm::vec3 view = normalize(toCam);
-	glm::vec3 incidence = normalize(toLight);
-	glm::vec3 reflection = incidence - 2.0f * normal * dot(incidence, normal);
-	return glm::pow(glm::max(dot(reflection, view), 0.0f), n);
-}
-
-static float flatBrightness(const glm::vec3 &normal, float intensity, const glm::vec3 &toLight, const glm::vec3 &toCam) {
-	float brightness = proximityBrightness(glm::length(toLight), intensity);
-	brightness *= angularBrightness(normal, toLight);
-	brightness += specularBrightness(normal, toLight, toCam);
-	return brightness;
-}
-
-static float gouraudBrightness(ModelTriangle &triangle, const float u, const float v, const float intensity, const glm::vec3 &toLight, const glm::vec3 &toCam) {
-	glm::vec3 &v0Norm = triangle.v0().normal;
-	glm::vec3 &v1Norm = triangle.v1().normal;
-	glm::vec3 &v2Norm = triangle.v2().normal;
-	float v0Brightness = flatBrightness(v0Norm, intensity, toLight, toCam);
-	float v1Brightness = flatBrightness(v1Norm, intensity, toLight, toCam);
-	float v2Brightness = flatBrightness(v2Norm, intensity, toLight, toCam);
-	float brightness = u * v1Brightness + v * v2Brightness + (1.0f - u - v) * v0Brightness;
-	return brightness;
-}
-
-static float phongBrightness(ModelTriangle &triangle, const float u, const float v, const float intensity, const glm::vec3 &toLight, const glm::vec3 &toCam) {
-	glm::vec3 normal = normalize(u * triangle.v1().normal + v * triangle.v2().normal + (1.0f - u - v) * triangle.v0().normal);
-	return flatBrightness(normal, intensity, toLight, toCam);
-}
-
-uint32_t Renderer::traceRay(Ray &ray, Scene &scene, Camera &cam) {
-	auto intersection = scene.closestIntersection(ray);
-	bool miss = intersection.triangleIndex == -1;
+glm::vec3 Renderer::traceRay(Ray &ray, Scene &scene, int depth) {
+	auto hit = scene.closestIntersection(ray);
+	bool miss = hit.triangleIndex == -1;
 	if (miss) return scene.backgroundColour(0, 0);
-	ModelTriangle &triangle = intersection.intersectedTriangle;
-	glm::vec3 surface = intersection.intersectionPoint;
-	glm::vec3 toCam = cam.position - surface;
-	float totalBrightness = 0;
+	ModelTriangle &triangle = hit.intersectedTriangle;
+	const Material &mat = triangle.material;
+	glm::vec3 surface = hit.intersectionPoint;
+	glm::vec3 colour = mat.diffuse * mat.ambient;
+	glm::vec3 V = -normalize(ray.dir);
+	glm::vec3 N = (lMode == PHONG) ?
+		normalize(hit.u * triangle.v1().normal + hit.v * triangle.v2().normal + (1.0f - hit.u - hit.v) * triangle.v0().normal)
+		: triangle.normal;
 
 	for (auto light: scene.lights) {
-		float brightness = 0;
-		glm::vec3 toLight = light.position - surface;
+		glm::vec3 lightDir = light.position - surface;
+		float dist = glm::length(lightDir);
 
-		switch (lMode) {
-			case FLAT:
-				brightness = flatBrightness(triangle.normal, light.intensity, toLight, toCam);
-				break;
-			case GOURAUD: {
-				brightness = gouraudBrightness(triangle, intersection.u, intersection.v, light.intensity, toLight, toCam);
-				break;
-			}
-			case PHONG:
-				brightness = phongBrightness(triangle, intersection.u, intersection.v, light.intensity, toLight, toCam);
-				break;
-			default:
-				break;
-		}
-
-		//shadow
-		Ray shadowRay(surface, normalize(toLight), glm::length(toLight));
-		auto shadowHit = scene.closestIntersection(shadowRay, MIN_DIST, shadowRay.dist - MIN_DIST);
+		Ray shadowRay(surface, normalize(lightDir), dist);
+		auto shadowHit = scene.closestIntersection(shadowRay, MIN_DIST, dist - MIN_DIST);
 		bool inShadow = shadowHit.triangleIndex != -1;
 		if (inShadow) continue;
 
-		totalBrightness += brightness;
+		colour += shade(hit, light, N, V);
 	}
 
-	totalBrightness = glm::clamp(totalBrightness, AMBIENT, 1.0f);
+	if (depth < MAX_DEPTH && mat.reflectivity > 0.0f) {
+		glm::vec3 R = glm::reflect(-V, N);
+		Ray reflectRay(surface + 0.001f * R, R);
+		glm::vec3 reflectColor = traceRay(reflectRay, scene, depth + 1);
+		colour = colour * (1.0f - mat.reflectivity) + reflectColor * mat.reflectivity;
+	}
 
-	return (255 << 24) + (
-		   (int(totalBrightness * triangle.material.colour.r * 255) << 16) +
-		   (int(totalBrightness * triangle.material.colour.g * 255) << 8) +
-		   (int(totalBrightness * triangle.material.colour.b * 255)));
+	colour = glm::clamp(colour, glm::vec3(0.0f), glm::vec3(1.0f));
+	return colour;
 }
 
 
@@ -173,11 +162,7 @@ void Renderer::wireframe(Scene &scene, Camera &cam) {
 		CanvasPoint v1 = cam.projectVertex(triangle.v1().position, window.height / 2.0f);
 		CanvasPoint v2 = cam.projectVertex(triangle.v2().position, window.height / 2.0f);
 		CanvasTriangle canvasTriangle = {v0, v1, v2};
-    	uint32_t colour =
-			(255 << 24) +
-			(int(triangle.material.colour.r * 255) << 16) +
-			(int(triangle.material.colour.g * 255) << 8) +
-			(int(triangle.material.colour.b * 255));
+    	uint32_t colour = packColour(triangle.material.diffuse);
 		drawTriangle(canvasTriangle, colour);
 	}
 }
@@ -190,11 +175,7 @@ void Renderer::raster(Scene &scene, Camera &cam) {
 		CanvasPoint v1 = cam.projectVertex(triangle.v1().position, window.height / 2.0f);
 		CanvasPoint v2 = cam.projectVertex(triangle.v2().position, window.height / 2.0f);
 		CanvasTriangle canvasTriangle = {v0, v1, v2};
-		uint32_t colour =
-			(255 << 24) +
-			(int(triangle.material.colour.r * 255) << 16) +
-			(int(triangle.material.colour.g * 255) << 8) +
-			(int(triangle.material.colour.b * 255));
+		uint32_t colour = packColour(triangle.material.diffuse);
 		fillTriangle(canvasTriangle, colour);
 	}
 }
@@ -203,7 +184,7 @@ void Renderer::raytrace(Scene &scene, Camera &cam) {
 	for (int y = 0; y < window.height; y++) {
 		for (int x = 0; x < window.width; x++) {
 			Ray ray = cam.projectRay(x, y, window.height / 2.0f);
-			uint32_t colour = traceRay(ray, scene, cam);
+			uint32_t colour = packColour(traceRay(ray, scene));
 			window.setPixelColour(x, y, colour);
 		}
 	}

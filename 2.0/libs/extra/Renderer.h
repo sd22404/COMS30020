@@ -11,6 +11,8 @@
 #include "Camera.h"
 #include "Ray.h"
 
+#define MAX_DEPTH 4
+
 class Renderer {
 private:
     DrawingWindow &window;
@@ -29,7 +31,8 @@ private:
     void drawLine(CanvasPoint &p0, CanvasPoint &p1, uint32_t &colour);
     void drawTriangle(CanvasTriangle &triangle, uint32_t &colour);
     void fillTriangle(CanvasTriangle &triangle, uint32_t &colour);
-    uint32_t traceRay(Ray &ray, Scene &scene, Camera &cam);
+    glm::vec3 shade(RayTriangleIntersection &hit, Light &light, glm::vec3 &normal, glm::vec3 &viewDir);
+    glm::vec3 traceRay(Ray &ray, Scene &scene, int depth = 0);
     void wireframe(Scene &scene, Camera &cam);
     void raster(Scene &scene, Camera &cam);
     void raytrace(Scene &scene, Camera &cam);

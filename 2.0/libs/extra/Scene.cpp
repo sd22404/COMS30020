@@ -48,9 +48,9 @@ Scene::Scene(const std::string &objFilename, std::vector<Light> &lights, float m
 	background = (it != textures.end()) ? &it->second : nullptr;
 }
 
-uint32_t Scene::backgroundColour(float x, float y) {
-	if (background == nullptr) return 0;
-	return background->pixels.at((y * background->width) + x);
+glm::vec3 Scene::backgroundColour(float x, float y) {
+	if (background == nullptr) return glm::vec3(0);
+	return unpackColour(background->pixels.at((y * background->width) + x));
 }
 
 RayTriangleIntersection Scene::closestIntersection(Ray &ray, float minDist, float maxDist) {
@@ -128,7 +128,7 @@ void Scene::readObj(const std::string &filename, float modelScale) {
 			for (size_t i = 1; i < splitln.size(); i++) {
 				std::vector<std::string> vt = split(splitln[i], '/');
 				if (!vt[0].empty()) vIndices.push_back(vt[0]);
-				if (!vt[1].empty()) tIndices.push_back(vt[1]);
+				if (vt.size() > 1 && !vt[1].empty()) tIndices.push_back(vt[1]);
 			}
 			// convert indices to ints and zero-index (ignoring first char 'f')
 			int iv0 = int(strtol(vIndices[0].c_str(), nullptr, 10) - 1);
@@ -197,7 +197,7 @@ void Scene::readMtl(const std::string &filename) {
 		}
 		if (splitln[0] == "Ks") {
 			materials.insert({name, Material(name, glm::vec3(0, 0, 0))});
-			materials[name].mirrored = true;
+			materials[name].reflectivity = strtof(splitln[1].c_str(), nullptr);
 		}
 		if (splitln[0] == "Ke") {
 			materials.insert({name, Material(name, glm::vec3(1, 1, 1))});
@@ -215,7 +215,7 @@ void Scene::readMtl(const std::string &filename) {
 			size_t parent = filename.find_last_of('/');
 			std::string texFile = filename.substr(0, parent + 1) + splitln[1];
 			*/
-			std::string texFile = "./assets/textures/" + splitln[1];
+			std::string texFile = "../assets/textures/" + splitln[1];
 			TextureMap texture = TextureMap(texFile);
 			textures.insert({name, texture});
 		}
@@ -225,7 +225,7 @@ void Scene::readMtl(const std::string &filename) {
 			/*size_t parent = filename.find_last_of('/');
 			std::string texFile = filename.substr(0, parent + 1) + splitln[1];
 			*/
-			std::string texFile = "./assets/normals/" + splitln[1];
+			std::string texFile = "../assets/normals/" + splitln[1];
 			TextureMap normal = TextureMap(texFile);
 			normalMaps.insert({name, normal});
 		}
