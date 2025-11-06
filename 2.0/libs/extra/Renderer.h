@@ -30,7 +30,7 @@ public:
 private:
     void drawLine(CanvasPoint &p0, CanvasPoint &p1, uint32_t &colour);
     void drawTriangle(CanvasTriangle &triangle, uint32_t &colour);
-    void fillTriangle(CanvasTriangle &triangle, uint32_t &colour);
+    void fillTriangle(CanvasTriangle &triangle, uint32_t &colour, const TextureMap &textureMap = TextureMap());
     glm::vec3 shade(RayTriangleIntersection &hit, Light &light, glm::vec3 &normal, glm::vec3 &viewDir);
     glm::vec3 traceRay(Ray &ray, Scene &scene, int depth = 0);
     void wireframe(Scene &scene, Camera &cam);

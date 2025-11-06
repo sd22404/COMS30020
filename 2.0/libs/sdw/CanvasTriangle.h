@@ -9,9 +9,6 @@ struct CanvasTriangle {
 
 	CanvasTriangle();
 	CanvasTriangle(const CanvasPoint &v0, const CanvasPoint &v1, const CanvasPoint &v2);
-	CanvasPoint &v0();
-	CanvasPoint &v1();
-	CanvasPoint &v2();
 	CanvasPoint operator[](size_t i) const;
 	CanvasPoint &operator[](size_t i);
 	bool isOffScreen(float width, float height);

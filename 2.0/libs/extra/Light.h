@@ -2,8 +2,7 @@
 
 #include <glm/glm.hpp>
 
-class Light {
-public:
+struct Light {
     Light(const glm::vec3 &position, const float &intensity)
         : position(position), colour(glm::vec3(1, 1, 1)), intensity(intensity) {}
     Light(const glm::vec3 &position, glm::vec3 &colour, const float &intensity)

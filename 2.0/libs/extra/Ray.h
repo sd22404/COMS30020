@@ -2,8 +2,7 @@
 
 #include "glm/vec3.hpp"
 
-class Ray {
-public:
+struct Ray {
     glm::vec3 start;
     glm::vec3 dir;
     float dist;

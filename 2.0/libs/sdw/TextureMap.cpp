@@ -2,7 +2,7 @@
 #include <filesystem>
 
 TextureMap::TextureMap() = default;
-TextureMap::TextureMap(const std::string &filename) {
+TextureMap::TextureMap(const std::string &filename, const std::string &name) {
 	std::ifstream inputStream(filename, std::ifstream::binary);
 	if(! inputStream) std::cout << "The file " << filename << " cannot be accessed by the TextureMap class...\nThis is usually because the PPM file is in the wrong folder\nOr you are passing in the wrong relative path" << std::endl;
 	std::string nextLine;
@@ -29,6 +29,8 @@ TextureMap::TextureMap(const std::string &filename) {
 		pixels[i] = ((255 << 24) + (red << 16) + (green << 8) + (blue));
 	}
 	inputStream.close();
+
+	this->name = name;
 }
 
 std::ostream &operator<<(std::ostream &os, const TextureMap &map) {

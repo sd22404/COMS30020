@@ -3,8 +3,7 @@
 #include <glm/glm.hpp>
 #include <string>
 
-class Material {
-public:
+struct Material {
     std::string name;
     glm::vec3 diffuse;
     glm::vec3 specular;

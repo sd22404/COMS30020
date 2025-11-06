@@ -61,10 +61,10 @@ RayTriangleIntersection Scene::closestIntersection(Ray &ray, float minDist, floa
 	for (auto &triangle : triangles) {
 		index++;
 		// calculate edge vectors
-		glm::vec3 e0 = triangle.v1().position - triangle.v0().position;
-		glm::vec3 e1 = triangle.v2().position - triangle.v0().position;
+		glm::vec3 e0 = triangle[1].position - triangle[0].position;
+		glm::vec3 e1 = triangle[2].position - triangle[0].position;
 		// calculate vector from startPoint to triangle
-		glm::vec3 SPVector = ray.start - triangle.v0().position;
+		glm::vec3 SPVector = ray.start - triangle[0].position;
 		// generate direction/edge matrix
 		glm::mat3 DEMatrix(-ray.dir, e0, e1);
 		// find possible solution in [t, u, v]
@@ -158,7 +158,6 @@ void Scene::readObj(const std::string &filename, float modelScale) {
 			modelTriangle.normal = normal;
 			modelTriangle.texture = texture.name.empty() ? "" : material.name;
 			modelTriangle.normalMap = normalMap.name.empty() ? "" : material.name;
-
 			// add triangle
 			triangles.emplace_back(modelTriangle);
 		}
@@ -216,7 +215,7 @@ void Scene::readMtl(const std::string &filename) {
 			std::string texFile = filename.substr(0, parent + 1) + splitln[1];
 			*/
 			std::string texFile = "../assets/textures/" + splitln[1];
-			TextureMap texture = TextureMap(texFile);
+			TextureMap texture = TextureMap(texFile, name);
 			textures.insert({name, texture});
 		}
 		if (splitln[0] == "map_bump") {
@@ -226,7 +225,7 @@ void Scene::readMtl(const std::string &filename) {
 			std::string texFile = filename.substr(0, parent + 1) + splitln[1];
 			*/
 			std::string texFile = "../assets/normals/" + splitln[1];
-			TextureMap normal = TextureMap(texFile);
+			TextureMap normal = TextureMap(texFile, name);
 			normalMaps.insert({name, normal});
 		}
 	}

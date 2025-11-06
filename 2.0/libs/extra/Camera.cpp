@@ -1,12 +1,14 @@
 #include "Camera.h"
 
-CanvasPoint Camera::projectVertex(const glm::vec3 &vertex, float canvasScale) {
+CanvasPoint Camera::projectVertex(const Vertex &vertex, float canvasScale) {
     // vertex in terms of camera coordinates
-	glm::vec3 finalPos = (vertex - position) * rotation;
+	glm::vec3 finalPos = (vertex.position - position) * rotation;
 	// transform onto image plane
 	float u = -canvasScale * focalLength * finalPos.x / finalPos.z + width / 2.0f;
 	float v = canvasScale * focalLength * finalPos.y / finalPos.z + height / 2.0f;
-	return {u, v, -1 / finalPos.z};
+    CanvasPoint point(u, v, -1 / finalPos.z);
+    point.texturePoint = vertex.texturePoint;
+	return point;
 }
 
 Ray Camera::projectRay(int &x, int &y, float canvasScale) {

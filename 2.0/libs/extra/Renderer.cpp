@@ -46,36 +46,42 @@ void Renderer::drawLine(CanvasPoint &p0, CanvasPoint &p1, uint32_t &colour) {
 
 void Renderer::drawTriangle(CanvasTriangle &triangle, uint32_t &colour) {
     // draw lines between each pair of vertices
-    drawLine(triangle.v0(), triangle.v1(), colour);
-    drawLine(triangle.v1(), triangle.v2(), colour);
-    drawLine(triangle.v2(), triangle.v0(), colour);
+    drawLine(triangle[0], triangle[1], colour);
+    drawLine(triangle[1], triangle[2], colour);
+    drawLine(triangle[2], triangle[0], colour);
 }
 
-void Renderer::fillTriangle(CanvasTriangle &triangle, uint32_t &colour) {
+void Renderer::fillTriangle(CanvasTriangle &triangle, uint32_t &colour, const TextureMap &textureMap) {
 	if (triangle.isOffScreen(window.width, window.height)) return;
 
-	float area = edgeFunction(triangle.v0(), triangle.v1(), triangle.v2());
+	float area = edgeFunction(triangle[0], triangle[1], triangle[2]);
 
-	int maxX = ceil(std::max({triangle.v0().x, triangle.v1().x, triangle.v2().x}));
-	int maxY = ceil(std::max({triangle.v0().y, triangle.v1().y, triangle.v2().y}));
-	int minX = floor(std::min({triangle.v0().x, triangle.v1().x, triangle.v2().x}));
-	int minY = floor(std::min({triangle.v0().y, triangle.v1().y, triangle.v2().y}));
+	int maxX = ceil(std::max({triangle[0].x, triangle[1].x, triangle[2].x}));
+	int maxY = ceil(std::max({triangle[0].y, triangle[1].y, triangle[2].y}));
+	int minX = floor(std::min({triangle[0].x, triangle[1].x, triangle[2].x}));
+	int minY = floor(std::min({triangle[0].y, triangle[1].y, triangle[2].y}));
 	// fill in triangle
 	for (int x = minX; x < maxX; x++) {
 		for (int y = minY; y < maxY; y++) {
 
 			CanvasPoint p = CanvasPoint(x, y);
 
-			const float u = edgeFunction(triangle.v1(), triangle.v2(), p) / area;
-            const float v = edgeFunction(triangle.v2(), triangle.v0(), p) / area;
+			const float u = edgeFunction(triangle[1], triangle[2], p) / area;
+            const float v = edgeFunction(triangle[2], triangle[0], p) / area;
             const float w = 1.0f - u - v;
 
-			float depth = u * triangle.v0().depth + v * triangle.v1().depth + w * triangle.v2().depth;
+			float depth = u * triangle[0].depth + v * triangle[1].depth + w * triangle[2].depth;
 			p.depth = depth;
 			if (!p.isOffScreen(window.width, window.height) &&
 				u >= 0 && v >= 0 && w >= 0 &&
 				depth > depthBuffer[y][x]) {
-					window.setPixelColour(x, y, colour);
+					if (!textureMap.name.empty()) {
+						int texX = (int)(floor(u * triangle[0].texturePoint.x + v * triangle[1].texturePoint.x + w * triangle[2].texturePoint.x));
+						int texY = (int)(floor(u * triangle[0].texturePoint.y + v * triangle[1].texturePoint.y + w * triangle[2].texturePoint.y));
+						window.setPixelColour(x, y, textureMap.pixels[texY * textureMap.width + texX]);
+					} else {
+						window.setPixelColour(x, y, colour);
+					}
 					depthBuffer[y][x] = depth;
 			}
 		}
@@ -97,14 +103,14 @@ glm::vec3 Renderer::shade(RayTriangleIntersection &hit, Light &light, glm::vec3 
 	float specular;
 
 	if (lMode == GOURAUD) {
-		float diff0 = std::max(dot(triangle.v0().normal, L), 0.0f);
-		float diff1 = std::max(dot(triangle.v1().normal, L), 0.0f);
-		float diff2 = std::max(dot(triangle.v2().normal, L), 0.0f);
+		float diff0 = std::max(dot(triangle[0].normal, L), 0.0f);
+		float diff1 = std::max(dot(triangle[1].normal, L), 0.0f);
+		float diff2 = std::max(dot(triangle[2].normal, L), 0.0f);
 		diffuse = (u * diff1 + v * diff2 + (1.0f - u - v) * diff0);
 
-		float spec0 = std::pow(std::max(dot(glm::reflect(-L, triangle.v0().normal), V), 0.0f), mat.shininess);
-		float spec1 = std::pow(std::max(dot(glm::reflect(-L, triangle.v1().normal), V), 0.0f), mat.shininess);
-		float spec2 = std::pow(std::max(dot(glm::reflect(-L, triangle.v2().normal), V), 0.0f), mat.shininess);
+		float spec0 = std::pow(std::max(dot(glm::reflect(-L, triangle[0].normal), V), 0.0f), mat.shininess);
+		float spec1 = std::pow(std::max(dot(glm::reflect(-L, triangle[1].normal), V), 0.0f), mat.shininess);
+		float spec2 = std::pow(std::max(dot(glm::reflect(-L, triangle[2].normal), V), 0.0f), mat.shininess);
 		specular = (u * spec1 + v * spec2 + (1.0f - u - v) * spec0);
 
 		return diffuse * mat.diffuse + specular * mat.specular * light.colour * attenuation;
@@ -128,7 +134,7 @@ glm::vec3 Renderer::traceRay(Ray &ray, Scene &scene, int depth) {
 	glm::vec3 colour = mat.diffuse * mat.ambient;
 	glm::vec3 V = -normalize(ray.dir);
 	glm::vec3 N = (lMode == PHONG) ?
-		normalize(hit.u * triangle.v1().normal + hit.v * triangle.v2().normal + (1.0f - hit.u - hit.v) * triangle.v0().normal)
+		normalize(hit.u * triangle[1].normal + hit.v * triangle[2].normal + (1.0f - hit.u - hit.v) * triangle[0].normal)
 		: triangle.normal;
 
 	for (auto light: scene.lights) {
@@ -158,9 +164,9 @@ glm::vec3 Renderer::traceRay(Ray &ray, Scene &scene, int depth) {
 void Renderer::wireframe(Scene &scene, Camera &cam) {
     for (auto &triangle : scene.triangles) {
 		// for each model triangle, project vertices onto canvas and draw resulting triangle
-		CanvasPoint v0 = cam.projectVertex(triangle.v0().position, window.height / 2.0f);
-		CanvasPoint v1 = cam.projectVertex(triangle.v1().position, window.height / 2.0f);
-		CanvasPoint v2 = cam.projectVertex(triangle.v2().position, window.height / 2.0f);
+		CanvasPoint v0 = cam.projectVertex(triangle[0].position, window.height / 2.0f);
+		CanvasPoint v1 = cam.projectVertex(triangle[1].position, window.height / 2.0f);
+		CanvasPoint v2 = cam.projectVertex(triangle[2].position, window.height / 2.0f);
 		CanvasTriangle canvasTriangle = {v0, v1, v2};
     	uint32_t colour = packColour(triangle.material.diffuse);
 		drawTriangle(canvasTriangle, colour);
@@ -171,12 +177,15 @@ void Renderer::raster(Scene &scene, Camera &cam) {
 	for(auto& row : depthBuffer) std::fill(row.begin(), row.end(), 0.0f);
 	for (auto &triangle : scene.triangles) {
 		// for each model triangle, project vertices onto canvas and draw resulting triangle
-		CanvasPoint v0 = cam.projectVertex(triangle.v0().position, window.height / 2.0f);
-		CanvasPoint v1 = cam.projectVertex(triangle.v1().position, window.height / 2.0f);
-		CanvasPoint v2 = cam.projectVertex(triangle.v2().position, window.height / 2.0f);
+		CanvasPoint v0 = cam.projectVertex(triangle[0], window.height / 2.0f);
+		CanvasPoint v1 = cam.projectVertex(triangle[1], window.height / 2.0f);
+		CanvasPoint v2 = cam.projectVertex(triangle[2], window.height / 2.0f);
 		CanvasTriangle canvasTriangle = {v0, v1, v2};
 		uint32_t colour = packColour(triangle.material.diffuse);
-		fillTriangle(canvasTriangle, colour);
+		if (!triangle.texture.empty()) {
+			fillTriangle(canvasTriangle, colour, scene.textures[triangle.texture]);
+		}
+		else fillTriangle(canvasTriangle, colour);
 	}
 }
 

@@ -43,7 +43,9 @@ add_executable(RedNoise
         libs/extra/Vertex.cpp
         src/RedNoise.cpp
         libs/extra/ExtraUtils.h
-        libs/extra/Ray.h)
+        libs/extra/Ray.h
+        libs/extra/Material.cpp
+        libs/extra/Ray.cpp)
 
 if (MSVC)
     target_compile_options(RedNoise

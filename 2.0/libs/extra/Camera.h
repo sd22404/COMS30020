@@ -5,6 +5,7 @@
 #include "glm/gtx/string_cast.hpp"
 #include "ExtraUtils.h"
 #include "Ray.h"
+#include "Vertex.h"
 
 class Camera {
 private:
@@ -19,7 +20,7 @@ public:
     float speed = 0.2f;
 
     Camera(int width, int height, float focalLength, glm::vec3 position) : width(width), height(height), startPosition(position), position(position), focalLength(focalLength) {};
-    CanvasPoint projectVertex(const glm::vec3 &vertex, float canvasScale);
+    CanvasPoint projectVertex(const Vertex &vertex, float canvasScale);
     Ray projectRay(int &x, int &y, float canvasScale);
     void reset();
     void lookAt(glm::vec3 target);
