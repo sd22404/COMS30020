@@ -1,8 +1,8 @@
 #include "Scene.h"
 
-glm::vec3 Scene::vertexNormal(Vertex &vertex, std::vector<ModelTriangle> &triangles) {
+static glm::vec3 vertexNormal(Vertex &vertex, std::vector<ModelTriangle> &triangles) {
 	// for each vertex on triangles in the model, if it's the same as given vertex, add to list
-	glm::vec3 total;
+	glm::vec3 total(0);
 	for (auto &triangle : triangles) {
 		for (auto &v : triangle.vertices) {
 			if (v.index == vertex.index) {
@@ -17,30 +17,35 @@ glm::vec3 Scene::vertexNormal(Vertex &vertex, std::vector<ModelTriangle> &triang
 	return total;
 }
 
-Scene::Scene(const std::string &objFilename, Camera &camera, std::vector<Light> &lights, float modelScale) : lights(lights), cam(camera) {
+void Scene::moveLight(Direction dir) {
+	switch (dir) {
+		case UP:
+			lights.at(0).position.y += 0.01;
+			break;
+		case DOWN:
+			lights.at(0).position.y -= 0.01;
+			break;
+		case LEFT:
+			lights.at(0).position.x -= 0.01;
+			break;
+		case RIGHT:
+			lights.at(0).position.x += 0.01;
+			break;
+		case FORWARD:
+			lights.at(0).position.z -= 0.01;
+			break;
+		case BACKWARD:
+			lights.at(0).position.z += 0.01;
+			break;
+		default:
+			break;
+	}
+}
+
+Scene::Scene(const std::string &objFilename, std::vector<Light> &lights, float modelScale) : lights(lights) {
 	readObj(objFilename, modelScale);
 	auto it = textures.find("background");
 	background = (it != textures.end()) ? &it->second : nullptr;
-}
-
-uint32_t Scene::traceRay(glm::vec3 dir) {
-	auto intersection = closestIntersection(cam.position, dir);
-	bool miss = intersection.triangleIndex == -1;
-	float brightness = 1.0f;
-	if (miss) return backgroundColour(0, 0);
-	const ModelTriangle &triangle = intersection.intersectedTriangle;
-
-	glm::vec3 toLight = lights.at(0).position - intersection.intersectionPoint;
-	float distToLight = glm::length(toLight);
-	glm::vec3 shadowDir = normalize(toLight);
-	auto shadow = closestIntersection(intersection.intersectionPoint + shadowDir * MIN_DIST, shadowDir, MIN_DIST, distToLight - MIN_DIST);
-	bool inShadow = shadow.triangleIndex != -1;
-	if (inShadow) brightness = 0.2f;
-
-	return (255 << 24) + (
-		   (int(brightness * triangle.material.colour.r * 255) << 16) +
-		   (int(brightness * triangle.material.colour.g * 255) << 8) +
-		   (int(brightness * triangle.material.colour.b * 255)));
 }
 
 uint32_t Scene::backgroundColour(float x, float y) {
@@ -48,7 +53,7 @@ uint32_t Scene::backgroundColour(float x, float y) {
 	return background->pixels.at((y * background->width) + x);
 }
 
-RayTriangleIntersection Scene::closestIntersection(glm::vec3 start, glm::vec3 dir, float minDist, float maxDist) {
+RayTriangleIntersection Scene::closestIntersection(Ray &ray, float minDist, float maxDist) {
 	float inverseClosestDistance = 0;
 	int index = -1;
 	RayTriangleIntersection intersection;
@@ -59,29 +64,21 @@ RayTriangleIntersection Scene::closestIntersection(glm::vec3 start, glm::vec3 di
 		glm::vec3 e0 = triangle.v1().position - triangle.v0().position;
 		glm::vec3 e1 = triangle.v2().position - triangle.v0().position;
 		// calculate vector from startPoint to triangle
-		glm::vec3 SPVector = start - triangle.v0().position;
+		glm::vec3 SPVector = ray.start - triangle.v0().position;
 		// generate direction/edge matrix
-		glm::mat3 DEMatrix(-dir, e0, e1);
+		glm::mat3 DEMatrix(-ray.dir, e0, e1);
 		// find possible solution in [t, u, v]
 		glm::vec3 possibleSolution = inverse(DEMatrix) * SPVector;
 		float t = possibleSolution.x, u = possibleSolution.y, v = possibleSolution.z;
 		// if closer than previously found solution, and within the bounds of the triangle, set new closest intersection
 		if (t > minDist && t < maxDist && 1 / t > inverseClosestDistance && u >= 0 && u <= 1.0 && v >= 0 && v <= 1.0 && (u + v) <= 1.0) {
-			intersection = RayTriangleIntersection(start + t * dir, t, triangle, index);
+			intersection = RayTriangleIntersection(ray.start + t * ray.dir, t, triangle, index);
 			intersection.u = u; intersection.v = v;
 			inverseClosestDistance = 1 / t;
 		}
 	}
 
 	return intersection;
-}
-
-CanvasPoint Scene::projectVertex(const glm::vec3 &vertex, float canvasScale) {
-	return cam.projectVertex(vertex, canvasScale);
-}
-
-glm::vec3 Scene::projectRay(int &x, int &y, float canvasScale) {
-	return cam.projectRay(x, y, canvasScale);
 }
 
 

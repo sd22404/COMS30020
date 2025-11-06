@@ -1,6 +1,6 @@
 #include "Camera.h"
 
-CanvasPoint Camera::projectVertex(const glm::vec3 &vertex, float &canvasScale) {
+CanvasPoint Camera::projectVertex(const glm::vec3 &vertex, float canvasScale) {
     // vertex in terms of camera coordinates
 	glm::vec3 finalPos = (vertex - position) * rotation;
 	// transform onto image plane
@@ -9,14 +9,14 @@ CanvasPoint Camera::projectVertex(const glm::vec3 &vertex, float &canvasScale) {
 	return {u, v, -1 / finalPos.z};
 }
 
-glm::vec3 Camera::projectRay(int &x, int &y, float &canvasScale) {
+Ray Camera::projectRay(int &x, int &y, float canvasScale) {
     // convert from SDL coordinate system into 3D/model coordinate system
     float sdlx = x - width / 2.0f;
     float sdlY = -y + height / 2.0f;
     // generate canvas point in 3D space, adjusted by cameraOrientation
     glm::vec3 canvasPoint3D = position + glm::vec3(sdlx, sdlY, -(focalLength * canvasScale)) * inverse(rotation);
     // subtract cameraPosition and normalise to get ray direction
-    glm::vec3 ray = normalize(canvasPoint3D - position);
+    Ray ray(position, normalize(canvasPoint3D - position));
     return ray;
 }
 

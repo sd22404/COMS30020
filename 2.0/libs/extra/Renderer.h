@@ -8,28 +8,29 @@
 #include <CanvasLine.h>
 #include <Utils.h>
 #include <algorithm>
+#include "Camera.h"
+#include "Ray.h"
 
 class Renderer {
-public:
-    enum RenderMode {
-        WIREFRAME,
-        RASTERISED,
-        RAYTRACED
-    };
 private:
     DrawingWindow &window;
-    RenderMode mode;
+    RenderMode rMode;
+    LightingMode lMode;
+    bool drawLight;
     std::vector<std::vector<float>> depthBuffer;
 public:
     Renderer(DrawingWindow &window) :
-        window(window), mode(WIREFRAME), depthBuffer(std::vector<std::vector<float>>(window.height, std::vector<float>(window.width, 0.0f))) {}
-    void setMode(RenderMode rMode) { mode = rMode; }
-    void draw(Scene &scene);
+        window(window), rMode(WIREFRAME), lMode(FLAT), drawLight(false), depthBuffer(std::vector<std::vector<float>>(window.height, std::vector<float>(window.width, 0.0f))) {}
+    void setRenderMode(RenderMode mode) { rMode = mode; }
+    void setLightingMode(LightingMode mode) { lMode = mode; }
+    void toggleLight() { drawLight = !drawLight; }
+    void draw(Scene &scene, Camera &cam);
 private:
     void drawLine(CanvasPoint &p0, CanvasPoint &p1, uint32_t &colour);
     void drawTriangle(CanvasTriangle &triangle, uint32_t &colour);
     void fillTriangle(CanvasTriangle &triangle, uint32_t &colour);
-    void wireframe(Scene &scene);
-    void raster(Scene &scene);
-    void raytrace(Scene &scene);
+    uint32_t traceRay(Ray &ray, Scene &scene, Camera &cam);
+    void wireframe(Scene &scene, Camera &cam);
+    void raster(Scene &scene, Camera &cam);
+    void raytrace(Scene &scene, Camera &cam);
 };

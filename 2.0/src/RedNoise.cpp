@@ -1,26 +1,35 @@
 #include <DrawingWindow.h>
 #include "Renderer.h"
-#include "Camera.h"
 #include <vector>
 
 #define WIDTH 640
 #define HEIGHT 480
 
-#define SCENE std::string("./assets/default/cornell-box.obj")
+#define SCENE std::string("../assets/sphere/sphere.obj")
 
-void handleEvent(SDL_Event event, DrawingWindow &window, Camera &cam, Renderer &r) {
+void handleEvent(SDL_Event event, DrawingWindow &window, Camera &cam, Renderer &r, Scene &scene) {
 	if (event.type == SDL_KEYDOWN) {
-		if (event.key.keysym.sym == SDLK_w) cam.move(Camera::FORWARD);
-		if (event.key.keysym.sym == SDLK_s) cam.move(Camera::BACKWARD);
-		if (event.key.keysym.sym == SDLK_a) cam.move(Camera::LEFT);
-		if (event.key.keysym.sym == SDLK_d) cam.move(Camera::RIGHT);
-		if (event.key.keysym.sym == SDLK_q) cam.move(Camera::DOWN);
-		if (event.key.keysym.sym == SDLK_e) cam.move(Camera::UP);
-		if (event.key.keysym.sym == SDLK_1) r.setMode(Renderer::WIREFRAME);
-		if (event.key.keysym.sym == SDLK_2) r.setMode(Renderer::RASTERISED);
-		if (event.key.keysym.sym == SDLK_3) r.setMode(Renderer::RAYTRACED);
+		if (event.key.keysym.sym == SDLK_w) cam.move(FORWARD);
+		if (event.key.keysym.sym == SDLK_s) cam.move(BACKWARD);
+		if (event.key.keysym.sym == SDLK_a) cam.move(LEFT);
+		if (event.key.keysym.sym == SDLK_d) cam.move(RIGHT);
+		if (event.key.keysym.sym == SDLK_q) cam.move(DOWN);
+		if (event.key.keysym.sym == SDLK_e) cam.move(UP);
+		if (event.key.keysym.sym == SDLK_1) r.setRenderMode(WIREFRAME);
+		if (event.key.keysym.sym == SDLK_2) r.setRenderMode(RASTERISED);
+		if (event.key.keysym.sym == SDLK_3) r.setRenderMode(RAYTRACED);
+		if (event.key.keysym.sym == SDLK_4) r.setLightingMode(FLAT);
+		if (event.key.keysym.sym == SDLK_5) r.setLightingMode(GOURAUD);
+		if (event.key.keysym.sym == SDLK_6) r.setLightingMode(PHONG);
 		if (event.key.keysym.sym == SDLK_SPACE) cam.reset();
 		if (event.key.keysym.sym == SDLK_LCTRL) cam.toggleOrbit();
+		if (event.key.keysym.sym == SDLK_LALT) r.toggleLight();
+		if (event.key.keysym.sym == SDLK_i) scene.moveLight(FORWARD);
+		if (event.key.keysym.sym == SDLK_k) scene.moveLight(BACKWARD);
+		if (event.key.keysym.sym == SDLK_j) scene.moveLight(LEFT);
+		if (event.key.keysym.sym == SDLK_l) scene.moveLight(RIGHT);
+		if (event.key.keysym.sym == SDLK_o) scene.moveLight(UP);
+		if (event.key.keysym.sym == SDLK_u) scene.moveLight(DOWN);
 	} else if (event.type == SDL_MOUSEBUTTONDOWN) {
 		window.savePPM("output.ppm");
 		window.saveBMP("output.bmp");
@@ -31,14 +40,14 @@ void handleEvent(SDL_Event event, DrawingWindow &window, Camera &cam, Renderer &
 	DrawingWindow window = DrawingWindow(WIDTH, HEIGHT, false);
 	SDL_Event event;
 	Camera cam = Camera(WIDTH, HEIGHT, 2.0f, glm::vec3(0, 0, 4));
-	Light light = Light(glm::vec3(0, 0.8f, 0), 1.0f);
+	Light light = Light(glm::vec3(0, 0.8f, 0), 15.0f);
 	std::vector<Light> lights = {light};
-	Scene scene = Scene(SCENE, cam, lights);
+	Scene scene = Scene(SCENE, lights);
 	Renderer r = Renderer(window);
 	while (true) {
 		// We MUST poll for events - otherwise the window will freeze !
-		if (window.pollForInputEvents(event)) handleEvent(event, window, cam, r);
-		r.draw(scene);
+		if (window.pollForInputEvents(event)) handleEvent(event, window, cam, r, scene);
+		r.draw(scene, cam);
 		cam.orbit();
 		// Need to render the frame at the end, or nothing actually gets shown on the screen !
 		window.renderFrame();

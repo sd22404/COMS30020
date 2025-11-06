@@ -29,6 +29,7 @@ include_directories(libs/extra)
 add_executable(RedNoise
         libs/sdw/CanvasPoint.cpp
         libs/sdw/CanvasTriangle.cpp
+        libs/sdw/CanvasLine.cpp
         libs/sdw/DrawingWindow.cpp
         libs/sdw/ModelTriangle.cpp
         libs/sdw/RayTriangleIntersection.cpp
@@ -40,7 +41,9 @@ add_executable(RedNoise
         libs/extra/Renderer.cpp
         libs/extra/Scene.cpp
         libs/extra/Vertex.cpp
-        src/RedNoise.cpp)
+        src/RedNoise.cpp
+        libs/extra/Enums.h
+        libs/extra/Ray.h)
 
 if (MSVC)
     target_compile_options(RedNoise
