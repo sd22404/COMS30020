@@ -21,7 +21,7 @@ map_bump wallpaper-normal.ppm
 
 newmtl Leopard
 map_Kd leopard.ppm
-Ks 1.000000 1.000000 1.000000
+#Ks 1.000000 1.000000 1.000000
 
 newmtl Magenta
 Kd 1.000000 0.000000 1.000000

@@ -6,7 +6,7 @@
 struct CanvasLine {
     std::vector<CanvasPoint> points{};
 
-    bool isOffScreen(float width, float height);
-    static std::vector<TexturePoint> interpolateTexturePoints(TexturePoint &from, TexturePoint &to, float numberOfValues);
-    CanvasLine(CanvasPoint &from, CanvasPoint &to, float numberOfValues);
+    bool isOffScreen(float width, float height) const;
+    static std::vector<TexturePoint> interpolateTexturePoints(const TexturePoint &from, const TexturePoint &to, long numberOfValues);
+    CanvasLine(const CanvasPoint &from, const CanvasPoint &to, long numberOfValues);
 };

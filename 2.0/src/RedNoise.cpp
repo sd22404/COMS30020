@@ -7,7 +7,7 @@
 
 #define SCENE std::string("../assets/scenes/scene-2.obj")
 
-void handleEvent(SDL_Event event, DrawingWindow &window, Camera &cam, Renderer &r, Scene &scene) {
+void handleEvent(const SDL_Event &event, const DrawingWindow &window, Camera &cam, Renderer &r, const Scene &scene) {
 	if (event.type == SDL_KEYDOWN) {
 		if (event.key.keysym.sym == SDLK_w) cam.move(FORWARD);
 		if (event.key.keysym.sym == SDLK_s) cam.move(BACKWARD);
@@ -37,13 +37,13 @@ void handleEvent(SDL_Event event, DrawingWindow &window, Camera &cam, Renderer &
 }
 
 [[noreturn]] int main(int argc, char *argv[]) {
-	DrawingWindow window = DrawingWindow(WIDTH, HEIGHT, false);
+	auto window = DrawingWindow(WIDTH, HEIGHT, false);
 	SDL_Event event;
-	Camera cam = Camera(WIDTH, HEIGHT, 2.0f, glm::vec3(0, 0, 4));
-	Light light = Light(glm::vec3(0, 0.8f, 0), 15.0f);
+	auto cam = Camera(WIDTH, HEIGHT, 2.0f, glm::vec3(0, 0, 4));
+	auto light = Light(glm::vec3(0, 0.8f, 0), 15.0f);
 	std::vector<Light> lights = {light};
-	Scene scene = Scene(SCENE, lights);
-	Renderer r = Renderer(window);
+	const auto scene = Scene(SCENE, lights);
+	auto r = Renderer(window);
 	while (true) {
 		// We MUST poll for events - otherwise the window will freeze !
 		if (window.pollForInputEvents(event)) handleEvent(event, window, cam, r, scene);

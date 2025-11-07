@@ -1,9 +1,6 @@
-#include <algorithm>
-#include <sstream>
 #include "Utils.h"
-#include "CanvasPoint.h"
 
-std::vector<std::string> split(const std::string &line, char delimiter) {
+std::vector<std::string> split(const std::string &line, const char delimiter) {
 	auto haystack = line;
 	std::vector<std::string> tokens;
 	size_t pos;
@@ -17,21 +14,21 @@ std::vector<std::string> split(const std::string &line, char delimiter) {
 }
 
 // Uses Cramer’s rule to convert from 2D coordinates to Barycentric proportional proximities
-glm::vec3 convertToBarycentricCoordinates(glm::vec2 v0, glm::vec2 v1, glm::vec2 v2, glm::vec2 r)
+glm::vec3 convertToBarycentricCoordinates(const glm::vec2 v0, const glm::vec2 v1, const glm::vec2 v2, const glm::vec2 r)
 {
-    glm::vec2 e0 = v1 - v0;
-    glm::vec2 e1 = v2 - v0;
-    glm::vec2 e2 = r - v0;
-    float d00 = glm::dot(e0, e0);
-    float d01 = glm::dot(e0, e1);
-    float d11 = glm::dot(e1, e1);
-    float d20 = glm::dot(e2, e0);
-    float d21 = glm::dot(e2, e1);
-    float denominator = d00 * d11 - d01 * d01;
-    float u = (d11 * d20 - d01 * d21) / denominator;
-    float v = (d00 * d21 - d01 * d20) / denominator;
-    float w = 1.0f - u - v;
-    return glm::vec3(u,v,w);
+    const glm::vec2 e0 = v1 - v0;
+    const glm::vec2 e1 = v2 - v0;
+    const glm::vec2 e2 = r - v0;
+    const float d00 = glm::dot(e0, e0);
+    const float d01 = glm::dot(e0, e1);
+    const float d11 = glm::dot(e1, e1);
+    const float d20 = glm::dot(e2, e0);
+    const float d21 = glm::dot(e2, e1);
+    const float denominator = d00 * d11 - d01 * d01;
+    const float u = (d11 * d20 - d01 * d21) / denominator;
+    const float v = (d00 * d21 - d01 * d20) / denominator;
+    const float w = 1.0f - u - v;
+    return {u,v,w};
 }
 
 float edgeFunction(const CanvasPoint &v0, const CanvasPoint &v1, const CanvasPoint &v2) {

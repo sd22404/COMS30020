@@ -1,6 +1,6 @@
 #include "Renderer.h"
 
-void Renderer::draw(Scene &scene, Camera &cam) {
+void Renderer::draw(const Scene &scene, const Camera &cam) {
 	window.clearPixels();
     switch(rMode) {
         case WIREFRAME:
@@ -17,124 +17,135 @@ void Renderer::draw(Scene &scene, Camera &cam) {
     }
 
 	if (drawLight) {
-		CanvasPoint ceilingLight = cam.projectVertex(scene.lights.at(0).position, window.height / 2.0f);
-		CanvasPoint left = CanvasPoint(ceilingLight.x - 5, ceilingLight.y - 5);
-		CanvasPoint right = CanvasPoint(ceilingLight.x + 5, ceilingLight.y - 5);
-		CanvasTriangle lightTriangle = {ceilingLight, left, right};
-		uint32_t colour = 0xFFFF0000;
+		const auto ceilingLight = cam.projectVertex(Vertex(scene.lights.at(0).position), static_cast<float>(window.height) / 2.0f);
+		const auto left = CanvasPoint(ceilingLight.x - 5, ceilingLight.y - 5);
+		const auto right = CanvasPoint(ceilingLight.x + 5, ceilingLight.y - 5);
+		const CanvasTriangle lightTriangle = {ceilingLight, left, right};
+		constexpr uint32_t colour = 0xFFFF0000;
 		drawTriangle(lightTriangle, colour);
 	}
 }
 
-void Renderer::drawLine(CanvasPoint &p0, CanvasPoint &p1, uint32_t &colour) {
+void Renderer::drawLine(const CanvasPoint &p0, const CanvasPoint &p1, const uint32_t &colour) const {
     // number of steps is one more than the maximum difference in x- or y-direction
-	float numberOfValues = glm::max(abs(p1.x - p0.x), abs(p1.y - p0.y));
+	const long numberOfValues = std::lroundf(glm::max(abs(p1.x - p0.x), abs(p1.y - p0.y)));
 
-	// interp along x and y, store in vector
-	CanvasLine line = CanvasLine(p0, p1, numberOfValues);
-	if (line.isOffScreen(window.width, window.height)) return;
+	// interpolate along x and y, store in vector
+	auto line = CanvasLine(p0, p1, numberOfValues);
+	if (line.isOffScreen(static_cast<float>(window.width), static_cast<float>(window.height))) return;
 
 	// set pixels based on interpolated values (rounded)
 	for (int i = 0; i < numberOfValues; i++) {
 		CanvasPoint &point = line.points[i];
 		// check point is on screen
-		if (!point.isOffScreen(window.width, window.height)) {
+		if (!point.isOffScreen(static_cast<float>(window.width), static_cast<float>(window.height))) {
 			window.setPixelColour(floor(point.x), floor(point.y), colour);
 		}
 	}
 }
 
-void Renderer::drawTriangle(CanvasTriangle &triangle, uint32_t &colour) {
+void Renderer::drawTriangle(const CanvasTriangle &triangle, const uint32_t &colour) const {
     // draw lines between each pair of vertices
     drawLine(triangle[0], triangle[1], colour);
     drawLine(triangle[1], triangle[2], colour);
     drawLine(triangle[2], triangle[0], colour);
 }
 
-void Renderer::fillTriangle(CanvasTriangle &triangle, uint32_t &colour, const TextureMap &textureMap) {
-	if (triangle.isOffScreen(window.width, window.height)) return;
+void Renderer::fillTriangle(const CanvasTriangle &triangle, const uint32_t &colour, const TextureMap &textureMap) {
+	// if (triangle.isOffScreen(static_cast<float>(window.width), static_cast<float>(window.height))) return;
 
-	float area = edgeFunction(triangle[0], triangle[1], triangle[2]);
+	const float area = edgeFunction(triangle[0], triangle[1], triangle[2]);
 
-	int maxX = ceil(std::max({triangle[0].x, triangle[1].x, triangle[2].x}));
-	int maxY = ceil(std::max({triangle[0].y, triangle[1].y, triangle[2].y}));
-	int minX = floor(std::min({triangle[0].x, triangle[1].x, triangle[2].x}));
-	int minY = floor(std::min({triangle[0].y, triangle[1].y, triangle[2].y}));
+	const int maxX = ceil(std::max({triangle[0].x, triangle[1].x, triangle[2].x}));
+	const int maxY = ceil(std::max({triangle[0].y, triangle[1].y, triangle[2].y}));
+	const int minX = floor(std::min({triangle[0].x, triangle[1].x, triangle[2].x}));
+	const int minY = floor(std::min({triangle[0].y, triangle[1].y, triangle[2].y}));
 	// fill in triangle
 	for (int x = minX; x < maxX; x++) {
 		for (int y = minY; y < maxY; y++) {
 
-			CanvasPoint p = CanvasPoint(x, y);
+			auto p = CanvasPoint(static_cast<float>(x), static_cast<float>(y));
 
 			const float u = edgeFunction(triangle[1], triangle[2], p) / area;
             const float v = edgeFunction(triangle[2], triangle[0], p) / area;
             const float w = 1.0f - u - v;
 
-			float depth = u * triangle[0].depth + v * triangle[1].depth + w * triangle[2].depth;
+			const float depth = u * triangle[0].depth + v * triangle[1].depth + w * triangle[2].depth;
 			p.depth = depth;
-			if (!p.isOffScreen(window.width, window.height) &&
+			if (!p.isOffScreen(static_cast<float>(window.width), static_cast<float>(window.height)) &&
 				u >= 0 && v >= 0 && w >= 0 &&
 				depth > depthBuffer[y][x]) {
-					if (!textureMap.name.empty()) {
-						int texX = (int)(floor(u * triangle[0].texturePoint.x + v * triangle[1].texturePoint.x + w * triangle[2].texturePoint.x));
-						int texY = (int)(floor(u * triangle[0].texturePoint.y + v * triangle[1].texturePoint.y + w * triangle[2].texturePoint.y));
-						window.setPixelColour(x, y, textureMap.pixels[texY * textureMap.width + texX]);
-					} else {
-						window.setPixelColour(x, y, colour);
-					}
-					depthBuffer[y][x] = depth;
+				if (!textureMap.name.empty()) {
+					const float texX = u * triangle[0].texturePoint.x + v * triangle[1].texturePoint.x + w * triangle[2].texturePoint.x;
+					const float texY = u * triangle[0].texturePoint.y + v * triangle[1].texturePoint.y + w * triangle[2].texturePoint.y;
+					const int iTexX = std::floor(texX * static_cast<float>(textureMap.width - 1));
+					const int iTexY = std::floor(texY * static_cast<float>(textureMap.height - 1));
+					window.setPixelColour(x, y, textureMap.pixels[iTexY * textureMap.width + iTexX]);
+				} else {
+					window.setPixelColour(x, y, colour);
+				}
+				depthBuffer[y][x] = depth;
 			}
 		}
 	}
 }
 
-glm::vec3 Renderer::shade(RayTriangleIntersection &hit, Light &light, glm::vec3 &N, glm::vec3 &V) {
-	ModelTriangle &triangle = hit.intersectedTriangle;
+glm::vec3 Renderer::shade(const RayTriangleIntersection &hit, const Light &light, const glm::vec3 &N, const glm::vec3 &V) const {
+	const ModelTriangle &triangle = hit.intersectedTriangle;
 	const Material &mat = triangle.material;
-	const float u = hit.u, v = hit.v;
+	glm::vec3 baseColour = mat.diffuse;
+	if (!triangle.texture.empty()) baseColour = unpackColour(hit.textureSample);
+	const float u = hit.u, v = hit.v, w = 1.0f - u - v;
 
-	glm::vec3 lightDir = light.position - hit.intersectionPoint;
-	float dist = glm::length(lightDir);
+	const glm::vec3 lightDir = light.position - hit.intersectionPoint;
+	const float dist = glm::length(lightDir);
 
-	glm::vec3 L = glm::normalize(lightDir);
+	const glm::vec3 L = glm::normalize(lightDir);
 
-	float attenuation = light.intensity / (4 * M_PIf * dist * dist + 1.0f);
+	const float attenuation = light.intensity / (4 * M_PIf * dist * dist + 1.0f);
 	float diffuse;
 	float specular;
 
 	if (lMode == GOURAUD) {
-		float diff0 = std::max(dot(triangle[0].normal, L), 0.0f);
-		float diff1 = std::max(dot(triangle[1].normal, L), 0.0f);
-		float diff2 = std::max(dot(triangle[2].normal, L), 0.0f);
-		diffuse = (u * diff1 + v * diff2 + (1.0f - u - v) * diff0);
+		const float diff0 = std::max(dot(triangle[0].normal, L), 0.0f);
+		const float diff1 = std::max(dot(triangle[1].normal, L), 0.0f);
+		const float diff2 = std::max(dot(triangle[2].normal, L), 0.0f);
+		diffuse = (u * diff1 + v * diff2 + w * diff0);
 
-		float spec0 = std::pow(std::max(dot(glm::reflect(-L, triangle[0].normal), V), 0.0f), mat.shininess);
-		float spec1 = std::pow(std::max(dot(glm::reflect(-L, triangle[1].normal), V), 0.0f), mat.shininess);
-		float spec2 = std::pow(std::max(dot(glm::reflect(-L, triangle[2].normal), V), 0.0f), mat.shininess);
-		specular = (u * spec1 + v * spec2 + (1.0f - u - v) * spec0);
+		const float spec0 = std::pow(std::max(dot(glm::reflect(-L, triangle[0].normal), V), 0.0f), mat.shininess);
+		const float spec1 = std::pow(std::max(dot(glm::reflect(-L, triangle[1].normal), V), 0.0f), mat.shininess);
+		const float spec2 = std::pow(std::max(dot(glm::reflect(-L, triangle[2].normal), V), 0.0f), mat.shininess);
+		specular = (u * spec1 + v * spec2 + w * spec0);
 
-		return diffuse * mat.diffuse + specular * mat.specular * light.colour * attenuation;
+		return (diffuse * baseColour + specular * mat.specular) * light.colour * attenuation;
 	}
 
 	diffuse = std::max(dot(N, L), 0.0f);
 
-	glm::vec3 R = glm::reflect(-L, N);
+	const glm::vec3 R = glm::reflect(-L, N);\
 	specular = std::pow(std::max(dot(R, V), 0.0f), mat.shininess);
 
-	return diffuse * mat.diffuse + specular * mat.specular * light.colour * attenuation;
+	return (diffuse * baseColour + specular * mat.specular) * light.colour * attenuation;
 }
 
-glm::vec3 Renderer::traceRay(Ray &ray, Scene &scene, int depth) {
+glm::vec3 Renderer::traceRay(const Ray &ray, const Scene &scene, int depth) {
 	auto hit = scene.closestIntersection(ray);
-	bool miss = hit.triangleIndex == -1;
+	bool miss = hit.triangleIndex == static_cast<size_t>(-1);
 	if (miss) return scene.backgroundColour(0, 0);
+
 	ModelTriangle &triangle = hit.intersectedTriangle;
 	const Material &mat = triangle.material;
 	glm::vec3 surface = hit.intersectionPoint;
+	const float u = hit.u, v = hit.v, w = 1.0f - u - v;
+
 	glm::vec3 colour = mat.diffuse * mat.ambient;
+	if (!triangle.texture.empty()) {
+		colour = unpackColour(hit.textureSample) * mat.ambient;
+	}
+
 	glm::vec3 V = -normalize(ray.dir);
-	glm::vec3 N = (lMode == PHONG) ?
-		normalize(hit.u * triangle[1].normal + hit.v * triangle[2].normal + (1.0f - hit.u - hit.v) * triangle[0].normal)
+	glm::vec3 N = !triangle.normalMap.empty() ? triangle.normal + (unpackColour(hit.normalSample) / 255.0f * 2.0f) - glm::vec3(1)
+		: (lMode == PHONG) ? normalize(u * triangle[1].normal + v * triangle[2].normal + w * triangle[0].normal)
 		: triangle.normal;
 
 	for (auto light: scene.lights) {
@@ -143,7 +154,7 @@ glm::vec3 Renderer::traceRay(Ray &ray, Scene &scene, int depth) {
 
 		Ray shadowRay(surface, normalize(lightDir), dist);
 		auto shadowHit = scene.closestIntersection(shadowRay, MIN_DIST, dist - MIN_DIST);
-		bool inShadow = shadowHit.triangleIndex != -1;
+		bool inShadow = shadowHit.triangleIndex != -1ul;
 		if (inShadow) continue;
 
 		colour += shade(hit, light, N, V);
@@ -161,39 +172,39 @@ glm::vec3 Renderer::traceRay(Ray &ray, Scene &scene, int depth) {
 }
 
 
-void Renderer::wireframe(Scene &scene, Camera &cam) {
+void Renderer::wireframe(const Scene &scene, const Camera &cam) const {
     for (auto &triangle : scene.triangles) {
 		// for each model triangle, project vertices onto canvas and draw resulting triangle
-		CanvasPoint v0 = cam.projectVertex(triangle[0].position, window.height / 2.0f);
-		CanvasPoint v1 = cam.projectVertex(triangle[1].position, window.height / 2.0f);
-		CanvasPoint v2 = cam.projectVertex(triangle[2].position, window.height / 2.0f);
+		CanvasPoint v0 = cam.projectVertex(triangle[0], static_cast<float>(window.height) / 2.0f);
+		CanvasPoint v1 = cam.projectVertex(triangle[1], static_cast<float>(window.height) / 2.0f);
+		CanvasPoint v2 = cam.projectVertex(triangle[2], static_cast<float>(window.height) / 2.0f);
 		CanvasTriangle canvasTriangle = {v0, v1, v2};
     	uint32_t colour = packColour(triangle.material.diffuse);
 		drawTriangle(canvasTriangle, colour);
 	}
 }
 
-void Renderer::raster(Scene &scene, Camera &cam) {
+void Renderer::raster(const Scene &scene, const Camera &cam) {
 	for(auto& row : depthBuffer) std::fill(row.begin(), row.end(), 0.0f);
 	for (auto &triangle : scene.triangles) {
 		// for each model triangle, project vertices onto canvas and draw resulting triangle
-		CanvasPoint v0 = cam.projectVertex(triangle[0], window.height / 2.0f);
-		CanvasPoint v1 = cam.projectVertex(triangle[1], window.height / 2.0f);
-		CanvasPoint v2 = cam.projectVertex(triangle[2], window.height / 2.0f);
+		CanvasPoint v0 = cam.projectVertex(triangle[0], static_cast<float>(window.height) / 2.0f);
+		CanvasPoint v1 = cam.projectVertex(triangle[1], static_cast<float>(window.height) / 2.0f);
+		CanvasPoint v2 = cam.projectVertex(triangle[2], static_cast<float>(window.height) / 2.0f);
 		CanvasTriangle canvasTriangle = {v0, v1, v2};
 		uint32_t colour = packColour(triangle.material.diffuse);
 		if (!triangle.texture.empty()) {
-			fillTriangle(canvasTriangle, colour, scene.textures[triangle.texture]);
+			fillTriangle(canvasTriangle, colour, scene.textures.find(triangle.texture)->second);
 		}
 		else fillTriangle(canvasTriangle, colour);
 	}
 }
 
-void Renderer::raytrace(Scene &scene, Camera &cam) {
-	for (int y = 0; y < window.height; y++) {
-		for (int x = 0; x < window.width; x++) {
-			Ray ray = cam.projectRay(x, y, window.height / 2.0f);
-			uint32_t colour = packColour(traceRay(ray, scene));
+void Renderer::raytrace(const Scene &scene, const Camera &cam) {
+	for (int y = 0; y < static_cast<int>(window.height); y++) {
+		for (int x = 0; x < static_cast<int>(window.width); x++) {
+			Ray ray = cam.projectRay(x, y, static_cast<float>(window.height) / 2.0f);
+			const uint32_t colour = packColour(traceRay(ray, scene));
 			window.setPixelColour(x, y, colour);
 		}
 	}

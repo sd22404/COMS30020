@@ -1,6 +1,6 @@
 #include "CanvasPoint.h"
 
-bool CanvasPoint::isOffScreen(float width, float height) {
+bool CanvasPoint::isOffScreen(const float width, const float height) const {
 	if (x >= width || x < 0 || y >= height || y < 0 || depth < 0) return true;
 	return false;
 }
@@ -8,21 +8,21 @@ bool CanvasPoint::isOffScreen(float width, float height) {
 CanvasPoint::CanvasPoint() :
 		texturePoint(-1, -1) {}
 
-CanvasPoint::CanvasPoint(float xPos, float yPos) :
+CanvasPoint::CanvasPoint(const float xPos, const float yPos) :
 		x(xPos),
 		y(yPos),
 		depth(0.0),
 		brightness(1.0),
 		texturePoint(-1, -1) {}
 
-CanvasPoint::CanvasPoint(float xPos, float yPos, float pointDepth) :
+CanvasPoint::CanvasPoint(const float xPos, const float yPos, const float pointDepth) :
 		x(xPos),
 		y(yPos),
 		depth(pointDepth),
 		brightness(1.0),
 		texturePoint(-1, -1) {}
 
-CanvasPoint::CanvasPoint(float xPos, float yPos, float pointDepth, float pointBrightness) :
+CanvasPoint::CanvasPoint(const float xPos, const float yPos, const float pointDepth, const float pointBrightness) :
 		x(xPos),
 		y(yPos),
 		depth(pointDepth),

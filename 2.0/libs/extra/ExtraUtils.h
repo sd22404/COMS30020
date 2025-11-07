@@ -21,17 +21,17 @@ enum Direction {
     BACKWARD
 };
 
-static uint32_t packColour(glm::vec3 colour) {
+static uint32_t packColour(const glm::vec3 colour) {
     return (255 << 24) + (
-           (int(colour.r * 255) << 16) +
-           (int(colour.g * 255) << 8) +
-           (int(colour.b * 255)));
+           (lround(colour.r * 255) << 16) +
+           (lround(colour.g * 255) << 8) +
+           (lround(colour.b * 255)));
 }
 
-static glm::vec3 unpackColour(uint32_t colour) {
+static glm::vec3 unpackColour(const uint32_t colour) {
     return {
-        ((colour >> 16) & 0xFF) / 255.0f,
-        ((colour >> 8) & 0xFF) / 255.0f,
-        (colour & 0xFF) / 255.0f,
+        static_cast<float>((colour >> 16) & 0xFF) / 255.0f,
+        static_cast<float>((colour >> 8) & 0xFF) / 255.0f,
+        static_cast<float>(colour & 0xFF) / 255.0f,
     };
 }

@@ -1,5 +1,4 @@
 #include "ModelTriangle.h"
-#include <utility>
 
 ModelTriangle::ModelTriangle() = default;
 

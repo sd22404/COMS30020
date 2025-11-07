@@ -1,22 +1,22 @@
 #include "CanvasLine.h"
 
-std::vector<TexturePoint> CanvasLine::interpolateTexturePoints(TexturePoint &from, TexturePoint &to, float numberOfValues) {
+std::vector<TexturePoint> CanvasLine::interpolateTexturePoints(const TexturePoint &from, const TexturePoint &to, const long numberOfValues) {
     // if one or fewer values, return only the start point (as it will be the same as the end point)
     std::vector<TexturePoint> result = {from};
     if (numberOfValues < 1) return result;
 
     TexturePoint interval = {to.x - from.x, to.y - from.y};
-    float stepX = interval.x / numberOfValues;
-    float stepY = interval.y / numberOfValues;
+    const float stepX = interval.x / static_cast<float>(numberOfValues);
+    const float stepY = interval.y / static_cast<float>(numberOfValues);
 
-    for (float i = 1; i < numberOfValues; i++) {
-        TexturePoint point = {from.x + i * stepX, from.y + i * stepY};
+    for (int i = 1; i < numberOfValues; i++) {
+        TexturePoint point = {from.x + static_cast<float>(i) * stepX, from.y + static_cast<float>(i) * stepY};
         result.push_back(point);
     }
     return result;
 }
 
-bool CanvasLine::isOffScreen(float width, float height) {
+bool CanvasLine::isOffScreen(const float width, const float height) const {
     return (points.front().x >= width && points.back().x >= width) ||
     (points.front().y >= height && points.back().y >= height) ||
     (points.front().x < 0 && points.back().x < 0) ||
@@ -24,18 +24,18 @@ bool CanvasLine::isOffScreen(float width, float height) {
     (points.front().depth < 0 && points.back().depth < 0);
 }
 
-CanvasLine::CanvasLine(CanvasPoint &from, CanvasPoint &to, float numberOfValues) {
+CanvasLine::CanvasLine(const CanvasPoint &from, const CanvasPoint &to, const long numberOfValues) {
     // if one or fewer values, return only the start point (as it will be the same as the end point)
     points = {from};
     if (numberOfValues < 1) return;
-    CanvasPoint interval = {to.x - from.x, to.y - from.y, to.depth - from.depth};
-    float stepX = interval.x / numberOfValues;
-    float stepY = interval.y / numberOfValues;
-    float stepD = interval.depth / numberOfValues;
+    const auto interval = CanvasPoint(to.x - from.x, to.y - from.y, to.depth - from.depth);
+    const float stepX = interval.x / static_cast<float>(numberOfValues);
+    const float stepY = interval.y / static_cast<float>(numberOfValues);
+    const float stepD = interval.depth / static_cast<float>(numberOfValues);
 
-    std::vector<TexturePoint> tps = interpolateTexturePoints(from.texturePoint, to.texturePoint, numberOfValues);
-    for (float i = 1; i < numberOfValues; i++) {
-        CanvasPoint point = {from.x + i * stepX, from.y + i * stepY, from.depth + i * stepD};
+    const std::vector<TexturePoint> tps = interpolateTexturePoints(from.texturePoint, to.texturePoint, numberOfValues);
+    for (int i = 1; i < numberOfValues; i++) {
+        CanvasPoint point = {from.x + static_cast<float>(i) * stepX, from.y + static_cast<float>(i) * stepY, from.depth + static_cast<float>(i) * stepD};
         point.texturePoint = tps[i];
         points.push_back(point);
     }

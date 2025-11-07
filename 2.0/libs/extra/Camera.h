@@ -1,7 +1,6 @@
 #pragma once
 
 #include "CanvasPoint.h"
-#include <glm/glm.hpp>
 #include "glm/gtx/string_cast.hpp"
 #include "ExtraUtils.h"
 #include "Ray.h"
@@ -19,9 +18,9 @@ public:
     float focalLength = 2.0f;
     float speed = 0.2f;
 
-    Camera(int width, int height, float focalLength, glm::vec3 position) : width(width), height(height), startPosition(position), position(position), focalLength(focalLength) {};
-    CanvasPoint projectVertex(const Vertex &vertex, float canvasScale);
-    Ray projectRay(int &x, int &y, float canvasScale);
+    Camera(const int width, const int height, const float focalLength, const glm::vec3 position) : width(width), height(height), startPosition(position), position(position), focalLength(focalLength) {};
+    CanvasPoint projectVertex(const Vertex &vertex, float canvasScale) const;
+    Ray projectRay(int x, int y, float canvasScale) const;
     void reset();
     void lookAt(glm::vec3 target);
     void move(Direction dir);

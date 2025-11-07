@@ -21,19 +21,19 @@ private:
     bool drawLight;
     std::vector<std::vector<float>> depthBuffer;
 public:
-    Renderer(DrawingWindow &window) :
+    explicit Renderer(DrawingWindow &window) :
         window(window), rMode(WIREFRAME), lMode(FLAT), drawLight(false), depthBuffer(std::vector<std::vector<float>>(window.height, std::vector<float>(window.width, 0.0f))) {}
-    void setRenderMode(RenderMode mode) { rMode = mode; }
-    void setLightingMode(LightingMode mode) { lMode = mode; }
+    void setRenderMode(const RenderMode mode) { rMode = mode; }
+    void setLightingMode(const LightingMode mode) { lMode = mode; }
     void toggleLight() { drawLight = !drawLight; }
-    void draw(Scene &scene, Camera &cam);
+    void draw(const Scene &scene, const Camera &cam);
 private:
-    void drawLine(CanvasPoint &p0, CanvasPoint &p1, uint32_t &colour);
-    void drawTriangle(CanvasTriangle &triangle, uint32_t &colour);
-    void fillTriangle(CanvasTriangle &triangle, uint32_t &colour, const TextureMap &textureMap = TextureMap());
-    glm::vec3 shade(RayTriangleIntersection &hit, Light &light, glm::vec3 &normal, glm::vec3 &viewDir);
-    glm::vec3 traceRay(Ray &ray, Scene &scene, int depth = 0);
-    void wireframe(Scene &scene, Camera &cam);
-    void raster(Scene &scene, Camera &cam);
-    void raytrace(Scene &scene, Camera &cam);
+    void drawLine(const CanvasPoint &p0, const CanvasPoint &p1, const uint32_t &colour) const;
+    void drawTriangle(const CanvasTriangle &triangle, const uint32_t &colour) const;
+    void fillTriangle(const CanvasTriangle &triangle, const uint32_t &colour, const TextureMap &textureMap = TextureMap());
+    glm::vec3 shade(const RayTriangleIntersection &hit, const Light &light, const glm::vec3 &N, const glm::vec3 &V) const;
+    glm::vec3 traceRay(const Ray &ray, const Scene &scene, int depth = 0);
+    void wireframe(const Scene &scene, const Camera &cam) const;
+    void raster(const Scene &scene, const Camera &cam);
+    void raytrace(const Scene &scene, const Camera &cam);
 };

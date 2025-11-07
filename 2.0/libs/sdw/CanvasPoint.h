@@ -10,7 +10,7 @@ struct CanvasPoint {
 	float brightness{};
 	TexturePoint texturePoint{};
 
-	bool isOffScreen(float width, float height);
+	bool isOffScreen(float width, float height) const;
 
 	CanvasPoint();
 	CanvasPoint(float xPos, float yPos);
