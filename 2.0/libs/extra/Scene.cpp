@@ -42,100 +42,90 @@ void Scene::moveLight(const Direction dir) const {
 	}
 }
 
-Scene::Scene(const std::string &objFilename, std::vector<Light> &lights, const float modelScale) : lights(lights) {
-	readObj(objFilename, modelScale);
-	const auto it = textures.find("background");
-	background = (it != textures.end()) ? &it->second : nullptr;
+Scene::Scene(const std::vector<Obj> &objs, std::vector<Light> &lights) : lights(lights) {
+	for (const auto &obj : objs) {
+		readObj(obj);
+	}
 }
 
-glm::vec3 Scene::backgroundColour(const float x, const float y) const {
+glm::vec3 Scene::backgroundColour(const int x, const int y) const {
 	if (background == nullptr) return glm::vec3(0);
-	return unpackColour(background->pixels.at(std::lround(y) * background->width + std::lround(x)));
+	return unpackColour(background->pixels.at(y * background->width + x));
 }
 
-RayTriangleIntersection Scene::closestIntersection(const Ray &ray, const float minDist, const float maxDist) const {
+HitInfo Scene::closestIntersection(const Ray &ray, const float minDist, const float maxDist) const {
 	float inverseClosestDistance = 0;
-	int index = -1;
-	RayTriangleIntersection intersection;
-	intersection.triangleIndex = index;
-	for (auto &triangle : triangles) {
-		index++;
-		// calculate edge vectors
-		glm::vec3 e0 = triangle[1].position - triangle[0].position;
-		glm::vec3 e1 = triangle[2].position - triangle[0].position;
-		// calculate vector from startPoint to triangle
-		glm::vec3 SPVector = ray.start - triangle[0].position;
-		// generate direction/edge matrix
-		glm::mat3 DEMatrix(-ray.dir, e0, e1);
-		// find possible solution in [t, u, v]
-		const glm::vec3 possibleSolution = inverse(DEMatrix) * SPVector;
-		const float t = possibleSolution.x, u = possibleSolution.y, v = possibleSolution.z;
-		// if closer than previously found solution, and within the bounds of the triangle, set new closest intersection
-		if (t > minDist && t < maxDist && 1 / t > inverseClosestDistance && u >= 0 && u <= 1.0 && v >= 0 && v <= 1.0 && (u + v) <= 1.0) {
-			intersection = RayTriangleIntersection(ray.start + t * ray.dir, t, triangle, index);
-			intersection.u = u; intersection.v = v;
-			inverseClosestDistance = 1 / t;
+	int modelIndex = -1;
+	HitInfo intersection;
+	for (auto &model : models) {
+		modelIndex++;
+		int triIndex = -1;
+		for (auto &triangle : model.triangles) {
+			triIndex++;
+			// calculate edge vectors
+			glm::vec3 e0 = triangle[1].position - triangle[0].position;
+			glm::vec3 e1 = triangle[2].position - triangle[0].position;
+			// calculate vector from startPoint to triangle
+			glm::vec3 SPVector = ray.start - triangle[0].position;
+			// generate direction/edge matrix
+			glm::mat3 DEMatrix(-ray.dir, e0, e1);
+			// find possible solution in [t, u, v]
+			const glm::vec3 possibleSolution = inverse(DEMatrix) * SPVector;
+			const float t = possibleSolution.x, u = possibleSolution.y, v = possibleSolution.z;
+			// if closer than previously found solution, and within the bounds of the triangle, set new closest intersection
+			if (t > minDist && t < maxDist && 1.0f / t > inverseClosestDistance && u >= 0 && u <= 1.0 && v >= 0 && v <= 1.0 && (u + v) <= 1.0) {
+				intersection = HitInfo(ray.start + t * ray.dir, t, modelIndex, triIndex);
+				intersection.u = u; intersection.v = v; intersection.w = 1.0f - u - v;
+				inverseClosestDistance = 1 / t;
+			}
 		}
-	}
-
-	auto &triangle = intersection.intersectedTriangle;
-	const float u = intersection.u, v = intersection.v, w = 1.0f - u - v;
-
-	if (!triangle.texture.empty()) {
-		const TextureMap &texture = textures.find(triangle.texture)->second;
-		const float texX = u * triangle[0].texturePoint.x + v * triangle[1].texturePoint.x + w * triangle[2].texturePoint.x;
-		const float texY = u * triangle[0].texturePoint.y + v * triangle[1].texturePoint.y + w * triangle[2].texturePoint.y;
-		const int iTexX = std::floor(texX * static_cast<float>(texture.width - 1));
-		const int iTexY = std::floor(texY * static_cast<float>(texture.height - 1));
-		intersection.textureSample = texture.pixels[iTexY * texture.width + iTexX];
-	}
-
-	if (!triangle.normalMap.empty()) {
-		const TextureMap &texture = normalMaps.find(triangle.normalMap)->second;
-		const float texX = u * triangle[0].normalPoint.x + v * triangle[1].normalPoint.x + w * triangle[2].normalPoint.x;
-		const float texY = u * triangle[0].normalPoint.y + v * triangle[1].normalPoint.y + w * triangle[2].normalPoint.y;
-		const int iTexX = std::floor(texX * static_cast<float>(texture.width - 1));
-		const int iTexY = std::floor(texY * static_cast<float>(texture.height - 1));
-		intersection.normalSample = texture.pixels[iTexY * texture.width + iTexX];
 	}
 
 	return intersection;
 }
 
 
-void Scene::readObj(const std::string &objFilename, float modelScale) {
+void Scene::readObj(const Obj &obj) {
 	std::vector<glm::vec3> vertices;
 	std::vector<TexturePoint> texturePoints;
-	TextureMap texture, normalMap;
-	Material material;
+	std::unordered_map<std::string, Material> materials;
+	int count = 0;
 	std::string line;
 	std::vector<std::string> splitLn;
-	std::ifstream file(objFilename);
-    std::cout << "Reading model from " << objFilename << " ..." << std::endl;
+	std::ifstream file(obj.filename);
 	// read from file
 	while(getline(file, line)) {
 		// split line into segments
 		splitLn = split(line, ' ');
 		// read from mtl file
 		if (splitLn[0] == "mtllib") {
-			size_t parent = objFilename.find_last_of('/');
-			std::string matFile = objFilename.substr(0, parent + 1) + splitLn[1];
-			readMtl(matFile);
+			size_t parent = obj.filename.find_last_of('/');
+			std::string matFile = obj.filename.substr(0, parent + 1) + splitLn[1];
+			materials = readMtl(matFile);
+		}
+		if (splitLn[0] == "o") {
+			// Start a new model entry
+			models.emplace_back();
+			models.back().name = splitLn[1];
+			models.back().sMode = obj.shadingMode;
+			count++;
 		}
 		if (splitLn[0] == "usemtl") {
-			// look up colour from palette
-			material = materials[splitLn[1]];
-			// check if texture and normal map exist for this material, otherwise reset them
-			auto it = textures.find(splitLn[1]);
-			if (it != textures.end()) texture = it->second;
-			else texture = TextureMap();
-			it = normalMaps.find(splitLn[1]);
-			if (it != normalMaps.end()) normalMap = it->second;
-			else normalMap = TextureMap();
+			// assign material to current model
+			auto &dst = models.back().material;
+			const auto &src = materials[splitLn[1]];
+			dst.name = src.name;
+			dst.diffuse = src.diffuse;
+			dst.specular = src.specular;
+			dst.shininess = src.shininess;
+			dst.ambient = src.ambient;
+			dst.reflectivity = src.reflectivity;
+			dst.texture = src.texture;
+			dst.normalMap = src.normalMap;
 		}
 		if (splitLn[0] == "v") {
 			// convert coords to floats and scale by 'modelScale' (ignoring first index which will be 'v')
-			glm::vec3 vertex = modelScale * glm::vec3(strtod(splitLn[1].c_str(), nullptr), strtod(splitLn[2].c_str(), nullptr), strtod(splitLn[3].c_str(), nullptr));
+			glm::vec3 vertex = obj.offset + obj.scale * glm::vec3(stof(splitLn[1]), stof(splitLn[2]), stof(splitLn[3]));
 			vertices.push_back(vertex);
 		}
 		if (splitLn[0] == "vt") {
@@ -165,45 +155,40 @@ void Scene::readObj(const std::string &objFilename, float modelScale) {
 				int it1 = std::stoi(tIndices[1]) - 1;
 				int it2 = std::stoi(tIndices[2]) - 1;
 				TexturePoint t0 = texturePoints[it0], t1 = texturePoints[it1], t2 = texturePoints[it2];
-				// set texture points if used
-				if (!texture.name.empty()) {
-					v0.texturePoint = t0; v1.texturePoint = t1; v2.texturePoint = t2;
-				}
-				// set normal map points if used
-				if (!normalMap.name.empty()) {
-					v0.normalPoint = t0; v1.normalPoint = t1; v2.normalPoint = t2;
-				}
+				// set texture points
+				v0.texturePoint = t0; v1.texturePoint = t1; v2.texturePoint = t2;
 			}
 
 			// calculate triangle face normal
 			glm::vec3 normal = normalize(cross(v1.position - v0.position, v2.position - v0.position));
 			// create new triangle
-			auto modelTriangle = ModelTriangle(v0, v1, v2, material);
+			auto modelTriangle = ModelTriangle(v0, v1, v2);
 			modelTriangle.normal = normal;
-			modelTriangle.texture = texture.name.empty() ? "" : material.name;
-			modelTriangle.normalMap = normalMap.name.empty() ? "" : material.name;
 			// add triangle
-			triangles.emplace_back(modelTriangle);
+			models.back().triangles.emplace_back(modelTriangle);
 		}
 	}
 
     file.close();
 
 	// calculate vertex normals based on neighbouring triangles
-	for (auto &triangle : triangles) {
-		for (auto &v : triangle.vertices) {
-			v.normal = vertexNormal(v, triangles);
+	for (auto &model : models) {
+		for (auto &triangle : model.triangles) {
+			for (auto &v : triangle.vertices) {
+				v.normal = vertexNormal(v, model.triangles);
+			}
 		}
 	}
 
-    std::cout << "Read " << triangles.size() << " triangles from " << objFilename << std::endl;
+    std::cout << "Read " << count << " model(s) from " << obj.filename << std::endl;
 }
 
-void Scene::readMtl(const std::string &filename) {
+std::unordered_map<std::string, Material> Scene::readMtl(const std::string &filename) {
 	std::ifstream file(filename);
 	std::string line;
-	std::string name;
 	std::vector<std::string> splitLn;
+	std::string name;
+	std::unordered_map<std::string, Material> materials;
 	// read from file
 	while(getline(file, line)) {
 		splitLn = split(line, ' ');
@@ -222,39 +207,29 @@ void Scene::readMtl(const std::string &filename) {
 			materials.insert({name, Material(name, glm::vec3(0, 0, 0))});
 			materials[name].reflectivity = strtof(splitLn[1].c_str(), nullptr);
 		}
-		if (splitLn[0] == "Ke") {
-			materials.insert({name, Material(name, glm::vec3(1, 1, 1))});
-			materials[name].emissive = true;
-		}
-		if (splitLn[0] == "Ka") {
-			materials.insert({name, Material(name, glm::vec3(1, 1, 1))});
-			materials[name].glassy = true;
-			materials[name].refractiveIndex = strtof(splitLn[1].c_str(), nullptr);
-		}
+		// if (splitLn[0] == "Ke") {
+		// 	materials.insert({name, Material(name, glm::vec3(1, 1, 1))});
+		// 	materials[name].emissive = true;
+		// }
+		// if (splitLn[0] == "Ka") {
+		// 	materials.insert({name, Material(name, glm::vec3(1, 1, 1))});
+		// 	materials[name].glassy = true;
+		// 	materials[name].refractiveIndex = strtof(splitLn[1].c_str(), nullptr);
+		// }
 		if (splitLn[0] == "map_Kd") {
 			materials.insert({name, Material(name, glm::vec3(0, 0, 0))});
-			// find texture filename and create TextureMap object
-			/*
-			size_t parent = filename.find_last_of('/');
-			std::string texFile = filename.substr(0, parent + 1) + splitLn[1];
-			*/
-			std::string texFile = "../assets/textures/" + splitLn[1];
-			auto texture = TextureMap(texFile, name);
-			textures.insert({name, texture});
+			std::string texFile = "./assets/textures/" + splitLn[1];
+			materials[name].texture = TextureMap(texFile, name);
 		}
 		if (splitLn[0] == "map_bump") {
 			materials.insert({name, Material(name, glm::vec3(0, 0, 0))});
-			// find texture filename and create TextureMap object
-			/*size_t parent = filename.find_last_of('/');
-			std::string texFile = filename.substr(0, parent + 1) + splitLn[1];
-			*/
-			std::string texFile = "../assets/normals/" + splitLn[1];
-			auto normal = TextureMap(texFile, name);
-			normalMaps.insert({name, normal});
+			std::string texFile = "./assets/normals/" + splitLn[1];
+			materials[name].normalMap = TextureMap(texFile, name);
 		}
 	}
 
     file.close();
 
-    std::cout << "Read " << materials.size() << " materials from " << filename << std::endl;
+    std::cout << "Read " << materials.size() << " material(s) from " << filename << std::endl;
+	return materials;
 }

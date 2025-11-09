@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../sdw/TexturePoint.h"
+#include "TexturePoint.h"
 #include <glm/gtx/string_cast.hpp>
 
 struct Vertex {
@@ -8,7 +8,6 @@ struct Vertex {
     glm::vec3 position{};
     glm::vec3 normal{};
     TexturePoint texturePoint{};
-    TexturePoint normalPoint{};
 
     Vertex();
     Vertex(float x, float y, float z);
@@ -17,6 +16,5 @@ struct Vertex {
     explicit Vertex(glm::vec3 position);
     Vertex(glm::vec3 position, glm::vec3 normal);
     Vertex(glm::vec3 position, glm::vec3 normal, TexturePoint tp);
-    Vertex(glm::vec3 position, glm::vec3 normal, TexturePoint tp, TexturePoint np);
     friend std::ostream &operator<<(std::ostream &os, const Vertex &vertex);
 };

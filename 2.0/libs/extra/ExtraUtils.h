@@ -6,7 +6,7 @@ enum RenderMode {
     RAYTRACED
 };
 
-enum LightingMode {
+enum ShadingMode {
     FLAT,
     GOURAUD,
     PHONG

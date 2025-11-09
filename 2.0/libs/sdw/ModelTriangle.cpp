@@ -2,8 +2,8 @@
 
 ModelTriangle::ModelTriangle() = default;
 
-ModelTriangle::ModelTriangle(const Vertex &v0, const Vertex &v1, const Vertex &v2, Material &mat) :
-		vertices({{v0, v1, v2}}), material(mat), normal() {}
+ModelTriangle::ModelTriangle(const Vertex &v0, const Vertex &v1, const Vertex &v2) :
+		vertices({{v0, v1, v2}}), normal() {}
 
 Vertex ModelTriangle::operator[](size_t i) const {
 	return vertices[i];

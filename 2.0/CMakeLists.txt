@@ -32,7 +32,7 @@ add_executable(RedNoise
         libs/sdw/CanvasLine.cpp
         libs/sdw/DrawingWindow.cpp
         libs/sdw/ModelTriangle.cpp
-        libs/sdw/RayTriangleIntersection.cpp
+        libs/sdw/HitInfo.cpp
         libs/sdw/TextureMap.cpp
         libs/sdw/TexturePoint.cpp
         libs/sdw/Utils.cpp
@@ -44,6 +44,9 @@ add_executable(RedNoise
         libs/extra/Material.cpp
         libs/extra/Ray.cpp
         libs/extra/ExtraUtils.cpp
+        libs/extra/Light.cpp
+        libs/extra/Obj.cpp
+        libs/extra/Model.cpp
         src/RedNoise.cpp
 )
 

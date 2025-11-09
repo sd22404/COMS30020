@@ -14,8 +14,6 @@ Vertex::Vertex(const glm::vec3 position, const glm::vec3 normal) : index(-1), po
 
 Vertex::Vertex(const glm::vec3 position, const glm::vec3 normal, const TexturePoint tp) : index(-1), position(position), normal(normal), texturePoint(tp) {}
 
-Vertex::Vertex(const glm::vec3 position, const glm::vec3 normal, const TexturePoint tp, const TexturePoint np) : index(-1), position(position), normal(normal), texturePoint(tp), normalPoint(np) {}
-
 std::ostream &operator<<(std::ostream &os, const Vertex &vertex) {
     os << glm::to_string(vertex.position) << ", " << glm::to_string(vertex.normal);
     return os;

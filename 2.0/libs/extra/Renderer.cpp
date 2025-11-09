@@ -90,13 +90,7 @@ void Renderer::fillTriangle(const CanvasTriangle &triangle, const uint32_t &colo
 	}
 }
 
-glm::vec3 Renderer::shade(const RayTriangleIntersection &hit, const Light &light, const glm::vec3 &N, const glm::vec3 &V) const {
-	const ModelTriangle &triangle = hit.intersectedTriangle;
-	const Material &mat = triangle.material;
-	glm::vec3 baseColour = mat.diffuse;
-	if (!triangle.texture.empty()) baseColour = unpackColour(hit.textureSample);
-	const float u = hit.u, v = hit.v, w = 1.0f - u - v;
-
+glm::vec3 Renderer::shade(const HitInfo &hit, const ModelTriangle &triangle, const Model &model, const glm::vec3 &baseColour, const Light &light, const glm::vec3 &N, const glm::vec3 &V) const {
 	const glm::vec3 lightDir = light.position - hit.intersectionPoint;
 	const float dist = glm::length(lightDir);
 
@@ -106,97 +100,117 @@ glm::vec3 Renderer::shade(const RayTriangleIntersection &hit, const Light &light
 	float diffuse;
 	float specular;
 
-	if (lMode == GOURAUD) {
+	if (model.sMode == GOURAUD) {
 		const float diff0 = std::max(dot(triangle[0].normal, L), 0.0f);
 		const float diff1 = std::max(dot(triangle[1].normal, L), 0.0f);
 		const float diff2 = std::max(dot(triangle[2].normal, L), 0.0f);
-		diffuse = (u * diff1 + v * diff2 + w * diff0);
+		diffuse = (hit.u * diff1 + hit.v * diff2 + hit.w * diff0);
 
-		const float spec0 = std::pow(std::max(dot(glm::reflect(-L, triangle[0].normal), V), 0.0f), mat.shininess);
-		const float spec1 = std::pow(std::max(dot(glm::reflect(-L, triangle[1].normal), V), 0.0f), mat.shininess);
-		const float spec2 = std::pow(std::max(dot(glm::reflect(-L, triangle[2].normal), V), 0.0f), mat.shininess);
-		specular = (u * spec1 + v * spec2 + w * spec0);
+		const float spec0 = std::pow(std::max(dot(glm::reflect(-L, triangle[0].normal), V), 0.0f), model.material.shininess);
+		const float spec1 = std::pow(std::max(dot(glm::reflect(-L, triangle[1].normal), V), 0.0f), model.material.shininess);
+		const float spec2 = std::pow(std::max(dot(glm::reflect(-L, triangle[2].normal), V), 0.0f), model.material.shininess);
+		specular = (hit.u * spec1 + hit.v * spec2 + hit.w * spec0);
 
-		return (diffuse * baseColour + specular * mat.specular) * light.colour * attenuation;
+		return (diffuse * baseColour + specular * model.material.specular) * light.colour * attenuation;
 	}
 
 	diffuse = std::max(dot(N, L), 0.0f);
 
-	const glm::vec3 R = glm::reflect(-L, N);\
-	specular = std::pow(std::max(dot(R, V), 0.0f), mat.shininess);
+	const glm::vec3 R = glm::reflect(-L, N);
+	specular = std::pow(std::max(dot(R, V), 0.0f), model.material.shininess);
 
-	return (diffuse * baseColour + specular * mat.specular) * light.colour * attenuation;
+	return (diffuse * baseColour + specular * model.material.specular) * light.colour * attenuation;
 }
 
 glm::vec3 Renderer::traceRay(const Ray &ray, const Scene &scene, int depth) {
 	auto hit = scene.closestIntersection(ray);
-	bool miss = hit.triangleIndex == static_cast<size_t>(-1);
-	if (miss) return scene.backgroundColour(0, 0);
+	if (hit.modelIndex == -1) return scene.backgroundColour(0, 0);
 
-	ModelTriangle &triangle = hit.intersectedTriangle;
-	const Material &mat = triangle.material;
-	glm::vec3 surface = hit.intersectionPoint;
-	const float u = hit.u, v = hit.v, w = 1.0f - u - v;
+	const Model &model = scene.models[hit.modelIndex];
+	const ModelTriangle &triangle = model.triangles[hit.triIndex];
+	const Material &mat = model.material;
+	glm::vec3 P = hit.intersectionPoint;
 
-	glm::vec3 colour = mat.diffuse * mat.ambient;
-	if (!triangle.texture.empty()) {
-		colour = unpackColour(hit.textureSample) * mat.ambient;
+	const float texX = hit.u * triangle[1].texturePoint.x + hit.v * triangle[2].texturePoint.x + hit.w * triangle[0].texturePoint.x;
+	const float texY = hit.u * triangle[1].texturePoint.y + hit.v * triangle[2].texturePoint.y + hit.w * triangle[0].texturePoint.y;
+
+	// base colour (diffuse or texture sample)
+	glm::vec3 baseColour = mat.diffuse;
+	if (!mat.texture.name.empty()) {
+		const size_t iTexX = std::floor(texX * static_cast<float>(mat.texture.width));
+		const size_t iTexY = std::floor(texY * static_cast<float>(mat.texture.height));
+		const size_t idx = (iTexY * mat.texture.width + iTexX) % (mat.texture.pixels.size());
+		const uint32_t textureSample = mat.texture.pixels[idx];
+		baseColour = unpackColour(textureSample);
 	}
 
+	// compute normal at intersection
 	glm::vec3 V = -normalize(ray.dir);
-	glm::vec3 N = !triangle.normalMap.empty() ? triangle.normal + (unpackColour(hit.normalSample) / 255.0f * 2.0f) - glm::vec3(1)
-		: (lMode == PHONG) ? normalize(u * triangle[1].normal + v * triangle[2].normal + w * triangle[0].normal)
+	glm::vec3 N = (model.sMode == PHONG)
+		? normalize(hit.u * triangle[1].normal + hit.v * triangle[2].normal + hit.w * triangle[0].normal)
 		: triangle.normal;
+	if (!mat.normalMap.name.empty()) {
+		const size_t iTexX = std::floor(texX * static_cast<float>(mat.normalMap.width));
+		const size_t iTexY = std::floor(texY * static_cast<float>(mat.normalMap.height));
+		const size_t idx = (iTexY * mat.normalMap.width + iTexX) % (mat.normalMap.pixels.size());
+		const uint32_t normalSample = mat.normalMap.pixels[idx];
+		glm::vec3 N_ts = unpackColour(normalSample) * 2.0f - glm::vec3(1.0f);
+		N = normalize(N + N_ts);
+	}
 
-	for (auto light: scene.lights) {
-		glm::vec3 lightDir = light.position - surface;
-		float dist = glm::length(lightDir);
-
-		Ray shadowRay(surface, normalize(lightDir), dist);
-		auto shadowHit = scene.closestIntersection(shadowRay, MIN_DIST, dist - MIN_DIST);
-		bool inShadow = shadowHit.triangleIndex != -1ul;
-		if (inShadow) continue;
-
-		colour += shade(hit, light, N, V);
+	glm::vec3 colour = baseColour * mat.ambient;
+	for (const auto &light : scene.lights) {
+		glm::vec3 Ldir = light.position - P;
+		float dist = glm::length(Ldir);
+		
+		if (model.sMode == FLAT) {
+			Ray shadowRay(P + N * 0.001f, normalize(Ldir), dist);
+			auto shadowHit = scene.closestIntersection(shadowRay, MIN_DIST, dist - MIN_DIST);
+			if (shadowHit.modelIndex != -1) continue;
+		}
+		
+		colour += shade(hit, triangle, model, baseColour, light, N, V);
 	}
 
 	if (depth < MAX_DEPTH && mat.reflectivity > 0.0f) {
 		glm::vec3 R = glm::reflect(-V, N);
-		Ray reflectRay(surface + 0.001f * R, R);
+		Ray reflectRay(P + 0.001f * R, R);
 		glm::vec3 reflectColor = traceRay(reflectRay, scene, depth + 1);
 		colour = colour * (1.0f - mat.reflectivity) + reflectColor * mat.reflectivity;
 	}
 
-	colour = glm::clamp(colour, glm::vec3(0.0f), glm::vec3(1.0f));
-	return colour;
+	return glm::clamp(colour, glm::vec3(0.0f), glm::vec3(1.0f));
 }
 
 
 void Renderer::wireframe(const Scene &scene, const Camera &cam) const {
-    for (auto &triangle : scene.triangles) {
-		// for each model triangle, project vertices onto canvas and draw resulting triangle
-		CanvasPoint v0 = cam.projectVertex(triangle[0], static_cast<float>(window.height) / 2.0f);
-		CanvasPoint v1 = cam.projectVertex(triangle[1], static_cast<float>(window.height) / 2.0f);
-		CanvasPoint v2 = cam.projectVertex(triangle[2], static_cast<float>(window.height) / 2.0f);
-		CanvasTriangle canvasTriangle = {v0, v1, v2};
-    	uint32_t colour = packColour(triangle.material.diffuse);
-		drawTriangle(canvasTriangle, colour);
+	for (auto &model : scene.models) {
+		for (auto &triangle : model.triangles) {
+			// for each model triangle, project vertices onto canvas and draw resulting triangle
+			CanvasPoint v0 = cam.projectVertex(triangle[0], static_cast<float>(window.height) / 2.0f);
+			CanvasPoint v1 = cam.projectVertex(triangle[1], static_cast<float>(window.height) / 2.0f);
+			CanvasPoint v2 = cam.projectVertex(triangle[2], static_cast<float>(window.height) / 2.0f);
+			CanvasTriangle canvasTriangle = {v0, v1, v2};
+			uint32_t colour = packColour(model.material.diffuse);
+			drawTriangle(canvasTriangle, colour);
+		}
 	}
 }
 
 void Renderer::raster(const Scene &scene, const Camera &cam) {
-	for(auto& row : depthBuffer) std::fill(row.begin(), row.end(), 0.0f);
-	for (auto &triangle : scene.triangles) {
-		// for each model triangle, project vertices onto canvas and draw resulting triangle
-		CanvasPoint v0 = cam.projectVertex(triangle[0], static_cast<float>(window.height) / 2.0f);
-		CanvasPoint v1 = cam.projectVertex(triangle[1], static_cast<float>(window.height) / 2.0f);
-		CanvasPoint v2 = cam.projectVertex(triangle[2], static_cast<float>(window.height) / 2.0f);
-		CanvasTriangle canvasTriangle = {v0, v1, v2};
-		uint32_t colour = packColour(triangle.material.diffuse);
-		if (!triangle.texture.empty()) {
-			fillTriangle(canvasTriangle, colour, scene.textures.find(triangle.texture)->second);
+	for (auto& row : depthBuffer) std::fill(row.begin(), row.end(), 0.0f);
+	for (auto &model : scene.models) {
+		for (auto &triangle : model.triangles) {
+			// for each model triangle, project vertices onto canvas and draw resulting triangle
+			CanvasPoint v0 = cam.projectVertex(triangle[0], static_cast<float>(window.height) / 2.0f);
+			CanvasPoint v1 = cam.projectVertex(triangle[1], static_cast<float>(window.height) / 2.0f);
+			CanvasPoint v2 = cam.projectVertex(triangle[2], static_cast<float>(window.height) / 2.0f);
+			CanvasTriangle canvasTriangle = {v0, v1, v2};
+			uint32_t colour = packColour(model.material.diffuse);
+			!model.material.texture.name.empty()
+			? fillTriangle(canvasTriangle, colour, model.material.texture)
+			: fillTriangle(canvasTriangle, colour);
 		}
-		else fillTriangle(canvasTriangle, colour);
 	}
 }
 

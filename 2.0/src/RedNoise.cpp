@@ -2,10 +2,10 @@
 #include "Renderer.h"
 #include <vector>
 
-#define WIDTH 640
-#define HEIGHT 480
+#define WIDTH 1280
+#define HEIGHT 960
 
-#define SCENE std::string("../assets/scenes/scene-2.obj")
+#define SCENE std::string("./assets/scenes/scene-2.obj")
 
 void handleEvent(const SDL_Event &event, const DrawingWindow &window, Camera &cam, Renderer &r, const Scene &scene) {
 	if (event.type == SDL_KEYDOWN) {
@@ -18,9 +18,6 @@ void handleEvent(const SDL_Event &event, const DrawingWindow &window, Camera &ca
 		if (event.key.keysym.sym == SDLK_1) r.setRenderMode(WIREFRAME);
 		if (event.key.keysym.sym == SDLK_2) r.setRenderMode(RASTERISED);
 		if (event.key.keysym.sym == SDLK_3) r.setRenderMode(RAYTRACED);
-		if (event.key.keysym.sym == SDLK_4) r.setLightingMode(FLAT);
-		if (event.key.keysym.sym == SDLK_5) r.setLightingMode(GOURAUD);
-		if (event.key.keysym.sym == SDLK_6) r.setLightingMode(PHONG);
 		if (event.key.keysym.sym == SDLK_SPACE) cam.reset();
 		if (event.key.keysym.sym == SDLK_LCTRL) cam.toggleOrbit();
 		if (event.key.keysym.sym == SDLK_LALT) r.toggleLight();
@@ -39,10 +36,19 @@ void handleEvent(const SDL_Event &event, const DrawingWindow &window, Camera &ca
 [[noreturn]] int main(int argc, char *argv[]) {
 	auto window = DrawingWindow(WIDTH, HEIGHT, false);
 	SDL_Event event;
-	auto cam = Camera(WIDTH, HEIGHT, 2.0f, glm::vec3(0, 0, 4));
-	auto light = Light(glm::vec3(0, 0.8f, 0), 15.0f);
-	std::vector<Light> lights = {light};
-	const auto scene = Scene(SCENE, lights);
+
+	auto cam = Camera(WIDTH, HEIGHT, 3.0f, glm::vec3(0, 0, 4));
+	
+	auto ceiling = Light(glm::vec3(0, 0.94f, 0), 15.0f);
+	auto blue = Light(glm::vec3(0.7f, -0.3f, 0), glm::vec3(0, 0, 1), 5.0f);
+	std::vector<Light> lights = {ceiling};
+
+	const std::vector<Obj> objs = {
+		Obj{"./assets/sphere/sphere.obj", PHONG, {-0.6, -1.1, 0.3}, 0.25f},
+		Obj{"./assets/cornell-box/cornell-box.obj", FLAT, {0, 0, 0}, 0.35f},
+	};
+	const auto scene = Scene(objs, lights);
+	
 	auto r = Renderer(window);
 	while (true) {
 		// We MUST poll for events - otherwise the window will freeze !
