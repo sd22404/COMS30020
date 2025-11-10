@@ -44,8 +44,12 @@ void handleEvent(const SDL_Event &event, const DrawingWindow &window, Camera &ca
 	std::vector<Light> lights = {ceiling};
 
 	const std::vector<Obj> objs = {
-		Obj{"./assets/sphere/glass-sphere.obj", PHONG, {-0.6, 0.3, -0.6}, 0.25f},
-		Obj{"./assets/cornell-box/cornell-box.obj", FLAT, {0, 0, 0}, 0.35f},
+		// Obj{"./assets/sphere/glass-sphere.obj", PHONG, {-0.6, 0.3, -0.6}, 0.25f},
+		// Obj{"./assets/cornell-box/cornell-box.obj", FLAT, {0, 0, 0}, 0.35f},
+		Obj{SCENE, FLAT},
+		Obj{"./assets/sphere/gold-sphere.obj", PHONG},
+		Obj{"./assets/bunny/glass-bunny.obj", PHONG},
+		Obj{"./assets/hackspace-logo/logo.obj", FLAT, {0.1f, 0.1f, -0.93f}, 0.0015f},
 	};
 	const auto scene = Scene(objs, lights);
 	

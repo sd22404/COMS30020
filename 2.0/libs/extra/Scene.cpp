@@ -219,6 +219,10 @@ std::unordered_map<std::string, Material> Scene::readMtl(const std::string &file
 		}
 		if (splitLn[0] == "Ke") {
 			materials.insert({name, Material(name, glm::vec3(1, 1, 1))});
+			materials[name].emissive = true;
+		}
+		if (splitLn[0] == "Kr") {
+			materials.insert({name, Material(name, glm::vec3(1, 1, 1))});
 			materials[name].reflectivity = stof(splitLn[1]);
 		}
 		if (splitLn[0] == "map_Kd") {
@@ -226,7 +230,7 @@ std::unordered_map<std::string, Material> Scene::readMtl(const std::string &file
 			std::string texFile = "./assets/textures/" + splitLn[1];
 			materials[name].texture = TextureMap(texFile, name);
 		}
-		if (splitLn[0] == "map_bump") {
+		if (splitLn[0] == "bump") {
 			materials.insert({name, Material(name, glm::vec3(0, 0, 0))});
 			std::string texFile = "./assets/normals/" + splitLn[1];
 			materials[name].normalMap = TextureMap(texFile, name);

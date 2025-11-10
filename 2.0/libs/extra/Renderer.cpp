@@ -159,25 +159,8 @@ glm::vec3 Renderer::traceRay(const Ray &ray, const Scene &scene, int depth) {
 		N = normalize(N + N_ts);
 	}
 
-	glm::vec3 colour = baseColour * mat.ambient;
-	for (const auto &light : scene.lights) {
-		glm::vec3 Ldir = light.position - P;
-		float dist = glm::length(Ldir);
-		
-		if (model.sMode == FLAT) {
-			Ray shadowRay(P + N * 0.001f, normalize(Ldir), dist);
-			auto shadowHit = scene.closestIntersection(shadowRay, MIN_DIST, dist - MIN_DIST);
-			if (shadowHit.modelIndex != -1) continue;
-		}
-		
-		colour += shade(hit, triangle, model, baseColour, light, N, V);
-	}
-
-	if (depth < MAX_DEPTH && mat.reflectivity > 0.0f && mat.transparency <= 0.0f) {
-		glm::vec3 R = glm::reflect(-V, N);
-		Ray reflectRay(P + 0.001f * R, R);
-		glm::vec3 reflectColor = traceRay(reflectRay, scene, depth + 1);
-		colour = colour * (1.0f - mat.reflectivity) + reflectColor * mat.reflectivity;
+	if (mat.emissive) {
+		return baseColour;
 	}
 
 	if (depth < MAX_DEPTH && mat.transparency > 0.0f) {
@@ -211,7 +194,29 @@ glm::vec3 Renderer::traceRay(const Ray &ray, const Scene &scene, int depth) {
 		glm::vec3 R = glm::reflect(-V, Nf);
 		Ray reflectRay(P + 0.001f * R, R);
 		glm::vec3 reflectColor = traceRay(reflectRay, scene, depth + 1);
-		colour = reflectColor * reflectance + refractColor * (1.0f - reflectance);
+		glm::vec3 colour = reflectColor * reflectance + refractColor * (1.0f - reflectance);
+		return glm::clamp(colour, glm::vec3(0.0f), glm::vec3(1.0f));
+	}
+
+	glm::vec3 colour = baseColour * mat.ambient;
+	for (const auto &light : scene.lights) {
+		glm::vec3 Ldir = light.position - P;
+		float dist = glm::length(Ldir);
+		
+		if (model.sMode == FLAT) {
+			Ray shadowRay(P + N * 0.001f, normalize(Ldir), dist);
+			auto shadowHit = scene.closestIntersection(shadowRay, MIN_DIST, dist - MIN_DIST);
+			if (shadowHit.modelIndex != -1) continue;
+		}
+		
+		colour += shade(hit, triangle, model, baseColour, light, N, V);
+	}
+
+	if (depth < MAX_DEPTH && mat.reflectivity > 0.0f && mat.transparency <= 0.0f) {
+		glm::vec3 R = glm::reflect(-V, N);
+		Ray reflectRay(P + 0.001f * R, R);
+		glm::vec3 reflectColor = traceRay(reflectRay, scene, depth + 1);
+		colour = colour * (1.0f - mat.reflectivity) + reflectColor * mat.reflectivity;
 	}
 
 	return glm::clamp(colour, glm::vec3(0.0f), glm::vec3(1.0f));

@@ -13,12 +13,10 @@ struct Material {
     float ambient = 0.1f;
     float reflectivity = 0.0f;
     float transparency = 0.0f;
-
+    float refractiveIndex = 1.0f;
+    bool emissive = false;
     TextureMap texture = TextureMap();
     TextureMap normalMap = TextureMap();
-
-    bool emissive = false;
-    float refractiveIndex = 1.0f;
 
     Material() = default;
     Material(std::string name, const glm::vec3 colour) : name(std::move(name)), diffuse(colour) {}

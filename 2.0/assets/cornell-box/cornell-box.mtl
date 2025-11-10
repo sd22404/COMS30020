@@ -3,7 +3,7 @@ Kd 1.000000 1.000000 1.000000
 
 newmtl Grey
 Kd 0.700000 0.700000 0.700000
-map_bump rocky-normal.ppm
+bump rocky-normal.ppm
 
 newmtl Red
 Kd 1.000000 0.000000 0.000000
@@ -25,15 +25,18 @@ Kd 0.000000 1.000000 1.000000
 
 newmtl Wallpaper
 map_Kd wallpaper.ppm
-map_bump wallpaper-normal.ppm
+bump wallpaper-normal.ppm
 
 newmtl Tiles
 map_Kd ceramic.ppm
-map_bump ceramic-normal.ppm
+bump ceramic-normal.ppm
 
 newmtl Mirror
-Ke 1.00000
+Kr 1.000000
 
 newmtl Glass
 d 0
 Ni 1.5
+
+newmtl Light
+Ke 1.000000
