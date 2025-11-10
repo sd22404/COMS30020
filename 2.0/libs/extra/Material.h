@@ -13,6 +13,7 @@ struct Material {
     float ambient = 0.1f;
     float reflectivity = 0.0f;
     float transparency = 0.0f;
+    float metalness = 0.0f;
     float refractiveIndex = 1.0f;
     bool emissive = false;
     TextureMap texture = TextureMap();

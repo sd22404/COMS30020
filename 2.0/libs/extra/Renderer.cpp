@@ -91,36 +91,57 @@ void Renderer::fillTriangle(const CanvasTriangle &triangle, const uint32_t &colo
 	}
 }
 
-glm::vec3 Renderer::shade(const HitInfo &hit, const ModelTriangle &triangle, const Model &model, const glm::vec3 &baseColour, const Light &light, const glm::vec3 &N, const glm::vec3 &V) const {
-	const glm::vec3 lightDir = light.position - hit.intersectionPoint;
-	const float dist = glm::length(lightDir);
 
-	const glm::vec3 L = glm::normalize(lightDir);
+static Ray refract(const glm::vec3 &P, const glm::vec3 &I, const glm::vec3 &N, const float &ior) {
+	glm::vec3 Nf = N;
+	float n1 = 1.0f;
+	float n2 = ior;
+	float cosI = glm::dot(I, Nf);
+	cosI = glm::clamp(cosI, -1.0f, 1.0f);
+	if (cosI > 0.0f) {
+		std::swap(n1, n2);
+		Nf = -Nf;
+		cosI = -cosI;
+	}
+	
+	const float eta = n1 / n2;
+	const float k = 1.0f - eta * eta * (1.0f - cosI * cosI);
 
-	const float attenuation = light.intensity / (4 * M_PIf * dist * dist + 1.0f);
-	float diffuse;
-	float specular;
-
-	if (model.sMode == GOURAUD) {
-		const float diff0 = std::max(dot(triangle[0].normal, L), 0.0f);
-		const float diff1 = std::max(dot(triangle[1].normal, L), 0.0f);
-		const float diff2 = std::max(dot(triangle[2].normal, L), 0.0f);
-		diffuse = (hit.u * diff1 + hit.v * diff2 + hit.w * diff0);
-
-		const float spec0 = std::pow(std::max(dot(glm::reflect(-L, triangle[0].normal), V), 0.0f), model.material.shininess);
-		const float spec1 = std::pow(std::max(dot(glm::reflect(-L, triangle[1].normal), V), 0.0f), model.material.shininess);
-		const float spec2 = std::pow(std::max(dot(glm::reflect(-L, triangle[2].normal), V), 0.0f), model.material.shininess);
-		specular = (hit.u * spec1 + hit.v * spec2 + hit.w * spec0);
-
-		return (diffuse * baseColour + specular * model.material.specular) * light.colour * attenuation;
+	if (k >= 0.0f) {
+		glm::vec3 T = eta * I - (eta * cosI + sqrtf(k)) * Nf;
+		return Ray(P + 0.001f * T, T);
 	}
 
-	diffuse = std::max(dot(N, L), 0.0f);
+	return Ray();
+}
 
-	const glm::vec3 R = glm::reflect(-L, N);
-	specular = std::pow(std::max(dot(R, V), 0.0f), model.material.shininess);
+static Ray reflect(const glm::vec3 &P, const glm::vec3 &I, const glm::vec3 &N) {
+	glm::vec3 Nf = N;
+	float cosI = glm::dot(I, Nf);
+	if (cosI > 0.0f) {
+		Nf = -Nf;
+	}
+	glm::vec3 R = glm::reflect(I, Nf);
+	return Ray(P + 0.001f * R, R);
+}
 
-	return (diffuse * baseColour + specular * model.material.specular) * light.colour * attenuation;
+static float fresnel(const glm::vec3 &I, const glm::vec3 &N, const float &ior) {
+	float n1 = 1.0f;
+	float n2 = ior;
+	float cosI = glm::dot(I, N);
+	cosI = glm::clamp(cosI, -1.0f, 1.0f);
+	if (cosI > 0.0f) {
+		std::swap(n1, n2);
+	}
+
+	if ((n1 / n2) * sqrtf(1.0f - cosI * cosI) >= 1.0f) {
+		return 1.0f;
+	}
+
+	// schlick approximation
+	float r0 = (n1 - n2) / (n1 + n2);
+	r0 *= r0;
+	return r0 + (1.0f - r0) * powf(1.0f - fabsf(cosI), 5.0f);
 }
 
 glm::vec3 Renderer::traceRay(const Ray &ray, const Scene &scene, int depth) {
@@ -130,8 +151,9 @@ glm::vec3 Renderer::traceRay(const Ray &ray, const Scene &scene, int depth) {
 	const Model &model = scene.models[hit.modelIndex];
 	const ModelTriangle &triangle = model.triangles[hit.triIndex];
 	const Material &mat = model.material;
-	glm::vec3 P = hit.intersectionPoint;
+	const glm::vec3 P = hit.intersectionPoint;
 
+	// interpolate texture coordinates
 	const float texX = hit.u * triangle[1].texturePoint.x + hit.v * triangle[2].texturePoint.x + hit.w * triangle[0].texturePoint.x;
 	const float texY = hit.u * triangle[1].texturePoint.y + hit.v * triangle[2].texturePoint.y + hit.w * triangle[0].texturePoint.y;
 
@@ -145,10 +167,12 @@ glm::vec3 Renderer::traceRay(const Ray &ray, const Scene &scene, int depth) {
 		baseColour = unpackColour(textureSample);
 	}
 
-	// compute normal at intersection
+	// compute normal at intersection (phong, flat, normal map)
 	glm::vec3 V = -normalize(ray.dir);
-	glm::vec3 N = (model.sMode == PHONG)
-		? normalize(hit.u * triangle[1].normal + hit.v * triangle[2].normal + hit.w * triangle[0].normal)
+	glm::vec3 N =
+		(model.sMode == PHONG)
+			? normalize(hit.u * triangle[1].normal + hit.v * triangle[2].normal + hit.w * triangle[0].normal)
+			+ 0.1f * mat.metalness * glm::vec3(rand() / static_cast<float>(RAND_MAX), rand() / static_cast<float>(RAND_MAX), rand() / static_cast<float>(RAND_MAX))
 		: triangle.normal;
 	if (!mat.normalMap.name.empty()) {
 		const size_t iTexX = std::floor(texX * static_cast<float>(mat.normalMap.width));
@@ -160,59 +184,61 @@ glm::vec3 Renderer::traceRay(const Ray &ray, const Scene &scene, int depth) {
 	}
 
 	if (mat.emissive) {
-		return baseColour;
-	}
-
-	if (depth < MAX_DEPTH && mat.transparency > 0.0f) {
-		glm::vec3 Nf = N;
-		float n1 = 1.0f;
-		float n2 = mat.refractiveIndex;
-		float cosI = glm::dot(-V, Nf);
-		cosI = glm::clamp(cosI, -1.0f, 1.0f);
-		if (cosI > 0.0f) {
-			std::swap(n1, n2);
-			Nf = -Nf;
-			cosI = -cosI;
-		}
-		const float eta = n1 / n2;
-		const float k = 1.0f - eta * eta * (1.0f - cosI * cosI);
-
-		// schlick approximation
-		float r0 = (n1 - n2) / (n1 + n2);
-		r0 *= r0;
-		float reflectance;
-		glm::vec3 refractColor(0.0f);
-		if (k >= 0.0f) {
-			glm::vec3 T = eta * -V - (eta * cosI + sqrtf(k)) * Nf;
-			Ray refractRay(P + 0.001f * T, T);
-			refractColor = traceRay(refractRay, scene, depth + 1);
-			reflectance = r0 + (1.0f - r0) * powf(1.0f - fabsf(cosI), 5.0f);
-		} else {
-			reflectance = 1.0f;
-		}
-
-		glm::vec3 R = glm::reflect(-V, Nf);
-		Ray reflectRay(P + 0.001f * R, R);
-		glm::vec3 reflectColor = traceRay(reflectRay, scene, depth + 1);
-		glm::vec3 colour = reflectColor * reflectance + refractColor * (1.0f - reflectance);
-		return glm::clamp(colour, glm::vec3(0.0f), glm::vec3(1.0f));
+		return glm::clamp(baseColour, glm::vec3(0.0f), glm::vec3(1.0f));
 	}
 
 	glm::vec3 colour = baseColour * mat.ambient;
+
 	for (const auto &light : scene.lights) {
-		glm::vec3 Ldir = light.position - P;
-		float dist = glm::length(Ldir);
-		
-		if (model.sMode == FLAT) {
-			Ray shadowRay(P + N * 0.001f, normalize(Ldir), dist);
-			auto shadowHit = scene.closestIntersection(shadowRay, MIN_DIST, dist - MIN_DIST);
-			if (shadowHit.modelIndex != -1) continue;
+		// skip back faces
+		if (glm::dot(N, V) < 0.0f) continue;
+
+		glm::vec3 L = normalize(light.position - P);
+		float dist = glm::length(light.position - P);
+		const float attenuation = light.intensity / (4 * M_PIf * dist * dist + 1.0f);
+		float diffuse = 0.0f, specular = 0.0f;
+
+		switch (model.sMode) {
+			case FLAT: {
+				// shadow
+				Ray shadowRay(P + N * 0.001f, L, dist);
+				auto shadowHit = scene.closestIntersection(shadowRay, MIN_DIST, dist - MIN_DIST);
+				if (shadowHit.modelIndex != -1) continue;
+			}
+			case PHONG: {
+				// diffuse/specular
+				diffuse = std::max(dot(N, L), 0.0f);
+				const glm::vec3 R = glm::reflect(-L, N);
+				specular = std::pow(std::max(dot(R, V), 0.0f), mat.shininess);
+				break;
+			}
+			default: {
+				const float diff0 = std::max(dot(triangle[0].normal, L), 0.0f);
+				const float diff1 = std::max(dot(triangle[1].normal, L), 0.0f);
+				const float diff2 = std::max(dot(triangle[2].normal, L), 0.0f);
+				diffuse = (hit.u * diff1 + hit.v * diff2 + hit.w * diff0);
+
+				const float spec0 = std::pow(std::max(dot(glm::reflect(-L, triangle[0].normal), V), 0.0f), mat.shininess);
+				const float spec1 = std::pow(std::max(dot(glm::reflect(-L, triangle[1].normal), V), 0.0f), mat.shininess);
+				const float spec2 = std::pow(std::max(dot(glm::reflect(-L, triangle[2].normal), V), 0.0f), mat.shininess);
+				specular = (hit.u * spec1 + hit.v * spec2 + hit.w * spec0);
+				break;
+			}
 		}
-		
-		colour += shade(hit, triangle, model, baseColour, light, N, V);
+
+		colour += (diffuse * baseColour + specular * mat.specular) * light.colour * attenuation;
 	}
 
-	if (depth < MAX_DEPTH && mat.reflectivity > 0.0f && mat.transparency <= 0.0f) {
+	if (depth < MAX_DEPTH && mat.transparency > 0.0f) {
+		Ray refractRay = refract(P, -V, N, mat.refractiveIndex);
+		Ray reflectRay = reflect(P, -V, N);
+		float kr = fresnel(-V, N, mat.refractiveIndex);
+		glm::vec3 reflectColour = traceRay(reflectRay, scene, depth + 1);
+		glm::vec3 refractColour = traceRay(refractRay, scene, depth + 1);
+		glm::vec3 transmission = reflectColour * kr + refractColour * (1.0f - kr);
+		colour = colour * (1.0f - mat.transparency) + transmission * mat.transparency;
+	}
+	else if (depth < MAX_DEPTH && mat.reflectivity > 0.0f) {
 		glm::vec3 R = glm::reflect(-V, N);
 		Ray reflectRay(P + 0.001f * R, R);
 		glm::vec3 reflectColor = traceRay(reflectRay, scene, depth + 1);

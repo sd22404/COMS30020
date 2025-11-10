@@ -1,2 +1,5 @@
 newmtl Leopard
 map_Kd leopard.ppm
+
+newmtl Mirror
+Kr 1

@@ -2,10 +2,8 @@
 #include "Renderer.h"
 #include <vector>
 
-#define WIDTH 1280
-#define HEIGHT 960
-
-#define SCENE std::string("./assets/scenes/scene-2.obj")
+#define WIDTH 640
+#define HEIGHT 480
 
 void handleEvent(const SDL_Event &event, const DrawingWindow &window, Camera &cam, Renderer &r, const Scene &scene) {
 	if (event.type == SDL_KEYDOWN) {
@@ -44,10 +42,10 @@ void handleEvent(const SDL_Event &event, const DrawingWindow &window, Camera &ca
 	std::vector<Light> lights = {ceiling};
 
 	const std::vector<Obj> objs = {
-		// Obj{"./assets/sphere/glass-sphere.obj", PHONG, {-0.6, 0.3, -0.6}, 0.25f},
-		// Obj{"./assets/cornell-box/cornell-box.obj", FLAT, {0, 0, 0}, 0.35f},
-		Obj{SCENE, FLAT},
-		Obj{"./assets/sphere/gold-sphere.obj", PHONG},
+		Obj{"./assets/sphere/glass-sphere.obj", PHONG, {-0.6, 0.3, -0.6}, 0.25f},
+		Obj{"./assets/sphere/red-sphere.obj", PHONG, {-0.4, 0.5, -0.8}, 0.15f},
+		Obj{"./assets/cornell-box/cornell-box.obj", FLAT},
+		// Obj{"./assets/sphere/gold-sphere.obj", PHONG},
 		Obj{"./assets/bunny/glass-bunny.obj", PHONG},
 		Obj{"./assets/hackspace-logo/logo.obj", FLAT, {0.1f, 0.1f, -0.93f}, 0.0015f},
 	};

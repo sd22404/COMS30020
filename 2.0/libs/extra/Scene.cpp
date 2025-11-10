@@ -222,8 +222,12 @@ std::unordered_map<std::string, Material> Scene::readMtl(const std::string &file
 			materials[name].emissive = true;
 		}
 		if (splitLn[0] == "Kr") {
-			materials.insert({name, Material(name, glm::vec3(1, 1, 1))});
+			materials.insert({name, Material(name, glm::vec3(0, 0, 0))});
 			materials[name].reflectivity = stof(splitLn[1]);
+		}
+		if (splitLn[0] == "Km") {
+			materials.insert({name, Material(name, glm::vec3(1, 1, 1))});
+			materials[name].metalness = stof(splitLn[1]);
 		}
 		if (splitLn[0] == "map_Kd") {
 			materials.insert({name, Material(name, glm::vec3(0, 0, 0))});

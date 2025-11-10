@@ -9,8 +9,7 @@ enum RenderMode {
 enum ShadingMode {
     FLAT,
     GOURAUD,
-    PHONG,
-    GLASS
+    PHONG
 };
 
 enum Direction {
