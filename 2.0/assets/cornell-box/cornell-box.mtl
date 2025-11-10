@@ -32,4 +32,8 @@ map_Kd ceramic.ppm
 map_bump ceramic-normal.ppm
 
 newmtl Mirror
-d 1.00000
+Ke 1.00000
+
+newmtl Glass
+d 0
+Ni 1.5

@@ -6,20 +6,20 @@
 #include "TextureMap.h"
 
 struct Material {
-    std::string name;
-    glm::vec3 diffuse;
-    glm::vec3 specular;
-    float shininess;
-    float ambient;
-    float reflectivity;
+    std::string name = "default";
+    glm::vec3 diffuse = glm::vec3(1);
+    glm::vec3 specular = glm::vec3(1);
+    float shininess = 256.0f;
+    float ambient = 0.1f;
+    float reflectivity = 0.0f;
+    float transparency = 0.0f;
 
     TextureMap texture = TextureMap();
     TextureMap normalMap = TextureMap();
 
-    // bool emissive;
-    bool glassy;
-    float refractiveIndex;
+    bool emissive = false;
+    float refractiveIndex = 1.0f;
 
-    Material() : name("default"), diffuse(glm::vec3(1, 1, 1)), specular(1, 1, 1), shininess(256.0f), ambient(0.1f), reflectivity(0) {}
-    Material(std::string name, const glm::vec3 colour) : name(std::move(name)), diffuse(colour), specular(1, 1, 1), shininess(256.0f), ambient(0.1f), reflectivity(0) {}
+    Material() = default;
+    Material(std::string name, const glm::vec3 colour) : name(std::move(name)), diffuse(colour) {}
 };

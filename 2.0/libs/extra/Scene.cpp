@@ -49,7 +49,7 @@ Scene::Scene(const std::vector<Obj> &objs, std::vector<Light> &lights) : lights(
 }
 
 glm::vec3 Scene::backgroundColour(const int x, const int y) const {
-	if (background == nullptr) return glm::vec3(0);
+	if (background == nullptr) return glm::vec3(0.5, 0.6, 0.9);
 	return unpackColour(background->pixels.at(y * background->width + x));
 }
 
@@ -112,16 +112,7 @@ void Scene::readObj(const Obj &obj) {
 		}
 		if (splitLn[0] == "usemtl") {
 			// assign material to current model
-			auto &dst = models.back().material;
-			const auto &src = materials[splitLn[1]];
-			dst.name = src.name;
-			dst.diffuse = src.diffuse;
-			dst.specular = src.specular;
-			dst.shininess = src.shininess;
-			dst.ambient = src.ambient;
-			dst.reflectivity = src.reflectivity;
-			dst.texture = src.texture;
-			dst.normalMap = src.normalMap;
+			models.back().material = materials[splitLn[1]];
 		}
 		if (splitLn[0] == "v") {
 			// convert coords to floats and scale by 'modelScale' (ignoring first index which will be 'v')
@@ -214,19 +205,22 @@ std::unordered_map<std::string, Material> Scene::readMtl(const std::string &file
 			materials.insert({name, Material(name, glm::vec3(1, 1, 1))});
 			materials[name].shininess = stof(splitLn[1]);
 		}
+		if (splitLn[0] == "Ka") {
+			materials.insert({name, Material(name, glm::vec3(0, 0, 0))});
+			materials[name].ambient = stof(splitLn[1]);
+		}
 		if (splitLn[0] == "d") {
 			materials.insert({name, Material(name, glm::vec3(1, 1, 1))});
-			materials[name].reflectivity = stof(splitLn[1]);
+			materials[name].transparency = 1.0f - stof(splitLn[1]);
 		}
 		if (splitLn[0] == "Ni") {
 			materials.insert({name, Material(name, glm::vec3(1, 1, 1))});
-			materials[name].glassy = true;
 			materials[name].refractiveIndex = stof(splitLn[1]);
 		}
-		// if (splitLn[0] == "Ke") {
-		// 	materials.insert({name, Material(name, glm::vec3(1, 1, 1))});
-		// 	materials[name].emissive = true;
-		// }
+		if (splitLn[0] == "Ke") {
+			materials.insert({name, Material(name, glm::vec3(1, 1, 1))});
+			materials[name].reflectivity = stof(splitLn[1]);
+		}
 		if (splitLn[0] == "map_Kd") {
 			materials.insert({name, Material(name, glm::vec3(0, 0, 0))});
 			std::string texFile = "./assets/textures/" + splitLn[1];

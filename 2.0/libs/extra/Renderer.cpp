@@ -173,11 +173,45 @@ glm::vec3 Renderer::traceRay(const Ray &ray, const Scene &scene, int depth) {
 		colour += shade(hit, triangle, model, baseColour, light, N, V);
 	}
 
-	if (depth < MAX_DEPTH && mat.reflectivity > 0.0f) {
+	if (depth < MAX_DEPTH && mat.reflectivity > 0.0f && mat.transparency <= 0.0f) {
 		glm::vec3 R = glm::reflect(-V, N);
 		Ray reflectRay(P + 0.001f * R, R);
 		glm::vec3 reflectColor = traceRay(reflectRay, scene, depth + 1);
 		colour = colour * (1.0f - mat.reflectivity) + reflectColor * mat.reflectivity;
+	}
+
+	if (depth < MAX_DEPTH && mat.transparency > 0.0f) {
+		glm::vec3 Nf = N;
+		float n1 = 1.0f;
+		float n2 = mat.refractiveIndex;
+		float cosI = glm::dot(-V, Nf);
+		cosI = glm::clamp(cosI, -1.0f, 1.0f);
+		if (cosI > 0.0f) {
+			std::swap(n1, n2);
+			Nf = -Nf;
+			cosI = -cosI;
+		}
+		const float eta = n1 / n2;
+		const float k = 1.0f - eta * eta * (1.0f - cosI * cosI);
+
+		// schlick approximation
+		float r0 = (n1 - n2) / (n1 + n2);
+		r0 *= r0;
+		float reflectance;
+		glm::vec3 refractColor(0.0f);
+		if (k >= 0.0f) {
+			glm::vec3 T = eta * -V - (eta * cosI + sqrtf(k)) * Nf;
+			Ray refractRay(P + 0.001f * T, T);
+			refractColor = traceRay(refractRay, scene, depth + 1);
+			reflectance = r0 + (1.0f - r0) * powf(1.0f - fabsf(cosI), 5.0f);
+		} else {
+			reflectance = 1.0f;
+		}
+
+		glm::vec3 R = glm::reflect(-V, Nf);
+		Ray reflectRay(P + 0.001f * R, R);
+		glm::vec3 reflectColor = traceRay(reflectRay, scene, depth + 1);
+		colour = reflectColor * reflectance + refractColor * (1.0f - reflectance);
 	}
 
 	return glm::clamp(colour, glm::vec3(0.0f), glm::vec3(1.0f));
@@ -234,7 +268,7 @@ void Renderer::raytrace(const Scene &scene, const Camera &cam) {
 				int expected = nextReport.load(std::memory_order_relaxed);
 				if (currentThreshold == expected && nextReport.compare_exchange_strong(expected, expected + reportEvery)) {
 					float pct = 100.0f * newCount / (window.width * window.height);
-					std::cout << "\rProgress: " << static_cast<int>(pct) << "%" << std::flush;
+					std::cout << "\rProgress: " << ceil(pct) << "%" << std::flush;
 				}
 			}
 		}
