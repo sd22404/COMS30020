@@ -32,5 +32,4 @@ map_Kd ceramic.ppm
 map_bump ceramic-normal.ppm
 
 newmtl Mirror
-Kd 0 0 12
-Ks 1.000000 1.000000 1.000000
+d 1.00000

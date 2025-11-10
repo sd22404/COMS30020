@@ -80,7 +80,8 @@ void Renderer::fillTriangle(const CanvasTriangle &triangle, const uint32_t &colo
 					const float texY = u * triangle[0].texturePoint.y + v * triangle[1].texturePoint.y + w * triangle[2].texturePoint.y;
 					const int iTexX = std::floor(texX * static_cast<float>(textureMap.width - 1));
 					const int iTexY = std::floor(texY * static_cast<float>(textureMap.height - 1));
-					window.setPixelColour(x, y, textureMap.pixels[iTexY * textureMap.width + iTexX]);
+					const size_t idx = (iTexY * textureMap.width + iTexX) % (textureMap.pixels.size());
+					window.setPixelColour(x, y, textureMap.pixels[idx]);
 				} else {
 					window.setPixelColour(x, y, colour);
 				}
@@ -215,11 +216,29 @@ void Renderer::raster(const Scene &scene, const Camera &cam) {
 }
 
 void Renderer::raytrace(const Scene &scene, const Camera &cam) {
+	time_t start = time(nullptr);
+	static const int reportEvery = 5000;
+	std::atomic<int> progress{0};
+	std::atomic<int> nextReport{reportEvery};
+	#pragma omp parallel for collapse(2) shared(scene, cam, progress, nextReport) num_threads(6)
 	for (int y = 0; y < static_cast<int>(window.height); y++) {
 		for (int x = 0; x < static_cast<int>(window.width); x++) {
 			Ray ray = cam.projectRay(x, y, static_cast<float>(window.height) / 2.0f);
 			const uint32_t colour = packColour(traceRay(ray, scene));
 			window.setPixelColour(x, y, colour);
+
+			// thread safe progress report
+			int newCount = progress.fetch_add(1, std::memory_order_relaxed) + 1;
+			int currentThreshold = (newCount / reportEvery) * reportEvery;
+			if (currentThreshold >= nextReport.load(std::memory_order_relaxed)) {
+				int expected = nextReport.load(std::memory_order_relaxed);
+				if (currentThreshold == expected && nextReport.compare_exchange_strong(expected, expected + reportEvery)) {
+					float pct = 100.0f * newCount / (window.width * window.height);
+					std::cout << "\rProgress: " << static_cast<int>(pct) << "%" << std::flush;
+				}
+			}
 		}
 	}
+	time_t end = time(nullptr);
+	std::cout << "\nFrametime: " << difftime(end, start) << " seconds." << std::endl;
 }

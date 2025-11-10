@@ -22,6 +22,8 @@ set(GLM_INCLUDE_DIRS libs/glm-0.9.7.2)
 
 find_package(SDL2 REQUIRED)
 
+
+
 include_directories(${SDL2_INCLUDE_DIRS} ${GLM_INCLUDE_DIRS})
 include_directories(libs/sdw)
 include_directories(libs/extra)
@@ -80,10 +82,10 @@ else ()
 
 endif()
 
-# find_package(OpenMP)
-# if(OpenMP_CXX_FOUND)
-#     target_link_libraries(RedNoise PUBLIC OpenMP::OpenMP_CXX)
-# endif()
+find_package(OpenMP)
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(RedNoise PUBLIC OpenMP::OpenMP_CXX)
+endif()
 
 target_compile_options(RedNoise PUBLIC "$<$<CONFIG:RelWithDebInfo>:${RELEASE_OPTIONS}>")
 target_compile_options(RedNoise PUBLIC "$<$<CONFIG:Release>:${RELEASE_OPTIONS}>")

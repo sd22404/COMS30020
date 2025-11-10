@@ -198,23 +198,34 @@ std::unordered_map<std::string, Material> Scene::readMtl(const std::string &file
 		}
 		if (splitLn[0] == "Kd") {
 			// create new colour from given values
-			float r = strtof(splitLn[1].c_str(), nullptr);
-			float g = strtof(splitLn[2].c_str(), nullptr);
-			float b = strtof(splitLn[3].c_str(), nullptr);
+			float r = stof(splitLn[1]);
+			float g = stof(splitLn[2]);
+			float b = stof(splitLn[3]);
 			materials.insert({name, Material(name, glm::vec3(r, g, b))});
 		}
 		if (splitLn[0] == "Ks") {
-			materials.insert({name, Material(name, glm::vec3(0, 0, 0))});
-			materials[name].reflectivity = strtof(splitLn[1].c_str(), nullptr);
+			float r = stof(splitLn[1]);
+			float g = stof(splitLn[2]);
+			float b = stof(splitLn[3]);
+			materials.insert({name, Material(name, glm::vec3(r, g, b))});
+			materials[name].specular = glm::vec3(r, g, b);
+		}
+		if (splitLn[0] == "Ns") {
+			materials.insert({name, Material(name, glm::vec3(1, 1, 1))});
+			materials[name].shininess = stof(splitLn[1]);
+		}
+		if (splitLn[0] == "d") {
+			materials.insert({name, Material(name, glm::vec3(1, 1, 1))});
+			materials[name].reflectivity = stof(splitLn[1]);
+		}
+		if (splitLn[0] == "Ni") {
+			materials.insert({name, Material(name, glm::vec3(1, 1, 1))});
+			materials[name].glassy = true;
+			materials[name].refractiveIndex = stof(splitLn[1]);
 		}
 		// if (splitLn[0] == "Ke") {
 		// 	materials.insert({name, Material(name, glm::vec3(1, 1, 1))});
 		// 	materials[name].emissive = true;
-		// }
-		// if (splitLn[0] == "Ka") {
-		// 	materials.insert({name, Material(name, glm::vec3(1, 1, 1))});
-		// 	materials[name].glassy = true;
-		// 	materials[name].refractiveIndex = strtof(splitLn[1].c_str(), nullptr);
 		// }
 		if (splitLn[0] == "map_Kd") {
 			materials.insert({name, Material(name, glm::vec3(0, 0, 0))});

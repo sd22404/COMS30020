@@ -10,6 +10,9 @@
 #include <algorithm>
 #include "Camera.h"
 #include "Ray.h"
+#include <iomanip>
+#include <omp.h>
+#include <atomic>
 
 #define MAX_DEPTH 4
 

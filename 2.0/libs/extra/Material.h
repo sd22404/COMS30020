@@ -17,8 +17,8 @@ struct Material {
     TextureMap normalMap = TextureMap();
 
     // bool emissive;
-    // bool glassy;
-    // float refractiveIndex;
+    bool glassy;
+    float refractiveIndex;
 
     Material() : name("default"), diffuse(glm::vec3(1, 1, 1)), specular(1, 1, 1), shininess(256.0f), ambient(0.1f), reflectivity(0) {}
     Material(std::string name, const glm::vec3 colour) : name(std::move(name)), diffuse(colour), specular(1, 1, 1), shininess(256.0f), ambient(0.1f), reflectivity(0) {}
