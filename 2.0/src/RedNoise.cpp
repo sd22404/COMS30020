@@ -13,12 +13,17 @@ void handleEvent(const SDL_Event &event, const DrawingWindow &window, Camera &ca
 		if (event.key.keysym.sym == SDLK_d) cam.move(RIGHT);
 		if (event.key.keysym.sym == SDLK_q) cam.move(DOWN);
 		if (event.key.keysym.sym == SDLK_e) cam.move(UP);
+		if (event.key.keysym.sym == SDLK_UP) cam.rotate(UP);
+		if (event.key.keysym.sym == SDLK_DOWN) cam.rotate(DOWN);
+		if (event.key.keysym.sym == SDLK_LEFT) cam.rotate(LEFT);
+		if (event.key.keysym.sym == SDLK_RIGHT) cam.rotate(RIGHT);
 		if (event.key.keysym.sym == SDLK_1) r.setRenderMode(WIREFRAME);
 		if (event.key.keysym.sym == SDLK_2) r.setRenderMode(RASTERISED);
 		if (event.key.keysym.sym == SDLK_3) r.setRenderMode(RAYTRACED);
-		if (event.key.keysym.sym == SDLK_SPACE) cam.reset();
+		if (event.key.keysym.sym == SDLK_LALT) cam.reset();
 		if (event.key.keysym.sym == SDLK_LCTRL) cam.toggleOrbit();
-		if (event.key.keysym.sym == SDLK_LALT) r.toggleLight();
+		if (event.key.keysym.sym == SDLK_SPACE) cam.lookAt({0, 0, 0});
+		if (event.key.keysym.sym == SDLK_p) r.toggleLight();
 		if (event.key.keysym.sym == SDLK_i) scene.moveLight(FORWARD);
 		if (event.key.keysym.sym == SDLK_k) scene.moveLight(BACKWARD);
 		if (event.key.keysym.sym == SDLK_j) scene.moveLight(LEFT);
@@ -36,16 +41,17 @@ void handleEvent(const SDL_Event &event, const DrawingWindow &window, Camera &ca
 	SDL_Event event;
 
 	auto cam = Camera(WIDTH, HEIGHT, 3.0f, glm::vec3(0, 0, 4));
-	
-	auto ceiling = Light(glm::vec3(0, 0.94f, 0), 15.0f);
-	auto blue = Light(glm::vec3(0.7f, -0.3f, 0), glm::vec3(0, 0, 1), 5.0f);
+
+	auto ceiling = Light(CEIL0, 15.0f, CEIL1 - CEIL0, CEIL2 - CEIL0);
+	auto ceilingPoint = Light({0, 0.94f, 0}, 15.0f);
+	auto blue = Light({0.8f, -0.3f, 0}, {0, 0, 1}, 5.0f);
 	std::vector<Light> lights = {ceiling};
 
 	const std::vector<Obj> objs = {
 		Obj{"./assets/sphere/glass-sphere.obj", PHONG, {-0.6, 0.3, -0.6}, 0.25f},
 		Obj{"./assets/sphere/red-sphere.obj", PHONG, {-0.4, 0.5, -0.8}, 0.15f},
 		Obj{"./assets/cornell-box/cornell-box.obj", FLAT},
-		// Obj{"./assets/sphere/gold-sphere.obj", PHONG},
+		Obj{"./assets/sphere/gold-sphere.obj", PHONG},
 		Obj{"./assets/bunny/glass-bunny.obj", PHONG},
 		Obj{"./assets/hackspace-logo/logo.obj", FLAT, {0.1f, 0.1f, -0.93f}, 0.0015f},
 	};

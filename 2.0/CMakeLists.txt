@@ -49,6 +49,7 @@ add_executable(RedNoise
         libs/extra/Light.cpp
         libs/extra/Obj.cpp
         libs/extra/Model.cpp
+        libs/extra/CubeMap.cpp
         src/RedNoise.cpp
 )
 

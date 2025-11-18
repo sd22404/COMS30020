@@ -50,7 +50,8 @@ Scene::Scene(const std::vector<Obj> &objs, std::vector<Light> &lights) : lights(
 
 glm::vec3 Scene::backgroundColour(const int x, const int y) const {
 	if (background == nullptr) return glm::vec3(0.5, 0.6, 0.9);
-	return unpackColour(background->pixels.at(y * background->width + x));
+	// return unpackColour(background->pixels.at(y * background->width + x));
+	return glm::vec3(0.0f);
 }
 
 HitInfo Scene::closestIntersection(const Ray &ray, const float minDist, const float maxDist) const {

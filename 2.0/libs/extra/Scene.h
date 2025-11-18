@@ -1,7 +1,7 @@
 #pragma once
 
 #include <ModelTriangle.h>
-#include <TextureMap.h>
+#include "CubeMap.h"
 #include "Material.h"
 #include "Light.h"
 #include <unordered_map>
@@ -23,7 +23,7 @@ public:
     void moveLight(Direction dir) const;
     std::vector<Model> models{};
     std::vector<Light> &lights;
-    const TextureMap *background{nullptr};
+    const CubeMap *background{nullptr};
 private:
     void readObj(const Obj &obj);
     std::unordered_map<std::string, Material> readMtl(const std::string &filename);

@@ -12,6 +12,7 @@ private:
     int height;
     bool orbiting = false;
     glm::vec3 startPosition = glm::vec3(0, 0, 4);
+    glm::mat3 startRotation = glm::mat3(glm::vec3(1, 0, 0), glm::vec3(0, 1, 0), glm::vec3(0, 0, 1));
 public:
     glm::vec3 position = glm::vec3(0, 0, 4);
     glm::mat3 rotation = glm::mat3(glm::vec3(1, 0, 0), glm::vec3(0, 1, 0), glm::vec3(0, 0, 1));
@@ -24,9 +25,7 @@ public:
     void reset();
     void lookAt(glm::vec3 target);
     void move(Direction dir);
+    void rotate(Direction dir);
     void toggleOrbit();
     void orbit();
-
-    static glm::mat3 rotateY(float angle);
-    static float degToRad(float deg);
 };

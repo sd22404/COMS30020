@@ -16,20 +16,19 @@ Ray Camera::projectRay(const int x, const int y, const float canvasScale) const 
     const float sdlX = static_cast<float>(x) - static_cast<float>(width) / 2.0f;
     const float sdlY = static_cast<float>(-y) + static_cast<float>(height) / 2.0f;
     // generate canvas point in 3D space, adjusted by cameraOrientation
-    const glm::vec3 canvasPoint3D = position + glm::vec3(sdlX, sdlY, -(focalLength * canvasScale)) * inverse(rotation);
+    const glm::vec3 dir = glm::vec3(sdlX, sdlY, -(focalLength * canvasScale)) * inverse(rotation);
     // subtract cameraPosition and normalise to get ray direction
-    return {position, normalize(canvasPoint3D - position)};
+    return {position, normalize(dir)};
 }
 
-glm::mat3 Camera::rotateY(const float angle) {
-    return {
-        glm::vec3(std::cos(angle), 0, -std::sin(angle)),
-        glm::vec3(0, 1, 0),
-        glm::vec3(std::sin(angle), 0, std::cos(angle))
-    };
+static glm::mat3 rotateAround(const glm::vec3 &axis, const float theta) {
+    glm::vec3 u = normalize(axis);
+	glm::mat3 W = {glm::vec3(0.0f, -u.z, u.y), glm::vec3(u.z, 0.0f, -u.x), glm::vec3(-u.y, u.x, 0.0f)};
+	glm::mat3 I = {glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f)};
+	return I + sinf(theta) * W + 2.0f * powf(sinf(theta / 2.0f), 2.0f) * W * W;
 }
 
-float Camera::degToRad(const float deg) {
+static float degToRad(const float deg) {
     return M_PI * deg / 180;
 }
 
@@ -43,37 +42,57 @@ void Camera::lookAt(const glm::vec3 target) {
 void Camera::move(const Direction dir) {
     switch (dir) {
         case UP:
-            position.y += speed;
+            position += speed * normalize(rotation[1]);
             break;
         case DOWN:
-            position.y -= speed;
+            position -= speed * normalize(rotation[1]);
             break;
         case LEFT:
-            position.x -= speed;
+            position -= speed * normalize(rotation[0]);
             break;
         case RIGHT:
-            position.x += speed;
+            position += speed * normalize(rotation[0]);
             break;
         case FORWARD:
-            position.z -= speed;
+            position -= speed * normalize(rotation[2]);
             break;
         case BACKWARD:
-            position.z += speed;
+            position += speed * normalize(rotation[2]);
             break;
         default:
             break;
     }
 }
 
+void Camera::rotate(const Direction dir) {
+    float theta = degToRad(speed * 10.0f);
+    switch (dir) {
+        case LEFT:
+            rotation = rotateAround({0, 1, 0}, -theta) * rotation;
+            break;
+        case RIGHT:
+            rotation = rotateAround({0, 1, 0}, theta) * rotation;
+            break;
+        case UP:
+            rotation = rotateAround(rotation[0], -theta) * rotation;
+            break;
+        case DOWN:
+            rotation = rotateAround(rotation[0], theta) * rotation;
+            break;
+        default:
+            return;
+    }
+}
+
 void Camera::reset() {
     position = startPosition;
-    rotation = glm::mat3(glm::vec3(1, 0, 0), glm::vec3(0, 1, 0), glm::vec3(0, 0, 1));
+    rotation = startRotation;
 }
 
 void Camera::toggleOrbit() { orbiting = !orbiting; }
 
 void Camera::orbit() {
     if (!orbiting) return;
-    position = position * rotateY(degToRad(speed * 10.0f));
+    position = rotateAround({0, 1, 0}, degToRad(speed * 10.0f)) * position;
     lookAt({0, 0, 0});
 }

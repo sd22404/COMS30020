@@ -17,12 +17,28 @@ void Renderer::draw(const Scene &scene, const Camera &cam) {
     }
 
 	if (drawLight) {
-		const auto ceilingLight = cam.projectVertex(Vertex(scene.lights.at(0).position), static_cast<float>(window.height) / 2.0f);
-		const auto left = CanvasPoint(ceilingLight.x - 5, ceilingLight.y - 5);
-		const auto right = CanvasPoint(ceilingLight.x + 5, ceilingLight.y - 5);
-		const CanvasTriangle lightTriangle = {ceilingLight, left, right};
+		const float focalScale = static_cast<float>(window.height) / 2.0f;
 		constexpr uint32_t colour = 0xFFFF0000;
-		drawTriangle(lightTriangle, colour);
+		for (const auto &light : scene.lights) {
+			const auto c = cam.projectVertex(Vertex(light.position), focalScale);
+			const bool hasExtent = (glm::length(light.uVec) > 0.0f) || (glm::length(light.vVec) > 0.0f);
+			if (light.type == AREA || hasExtent) {
+				const auto left = cam.projectVertex(Vertex(light.position + light.uVec), focalScale);
+				const auto right = cam.projectVertex(Vertex(light.position + light.vVec), focalScale);
+				const auto opp = cam.projectVertex(Vertex(light.position + light.uVec + light.vVec), focalScale);
+				const CanvasTriangle t1 = {c, left, right};
+				const CanvasTriangle t2 = {left, right, opp};
+				drawTriangle(t1, colour);
+				drawTriangle(t2, colour);
+			} else {
+				const float s = 6.0f; // marker size in pixels
+				CanvasPoint p0{c.x, c.y - s, c.depth};
+				CanvasPoint p1{c.x - s, c.y + s, c.depth};
+				CanvasPoint p2{c.x + s, c.y + s, c.depth};
+				const CanvasTriangle marker = {p0, p1, p2};
+				drawTriangle(marker, colour);
+			}
+		}
 	}
 }
 
@@ -193,40 +209,45 @@ glm::vec3 Renderer::traceRay(const Ray &ray, const Scene &scene, int depth) {
 		// skip back faces
 		if (glm::dot(N, V) < 0.0f) continue;
 
-		glm::vec3 L = normalize(light.position - P);
-		float dist = glm::length(light.position - P);
-		const float attenuation = light.intensity / (4 * M_PIf * dist * dist + 1.0f);
-		float diffuse = 0.0f, specular = 0.0f;
+		for (const auto &sample : light.samples) {
 
-		switch (model.sMode) {
-			case FLAT: {
-				// shadow
-				Ray shadowRay(P + N * 0.001f, L, dist);
-				auto shadowHit = scene.closestIntersection(shadowRay, MIN_DIST, dist - MIN_DIST);
-				if (shadowHit.modelIndex != -1) continue;
-			}
-			case PHONG: {
-				// diffuse/specular
-				diffuse = std::max(dot(N, L), 0.0f);
-				const glm::vec3 R = glm::reflect(-L, N);
-				specular = std::pow(std::max(dot(R, V), 0.0f), mat.shininess);
-				break;
-			}
-			default: {
-				const float diff0 = std::max(dot(triangle[0].normal, L), 0.0f);
-				const float diff1 = std::max(dot(triangle[1].normal, L), 0.0f);
-				const float diff2 = std::max(dot(triangle[2].normal, L), 0.0f);
-				diffuse = (hit.u * diff1 + hit.v * diff2 + hit.w * diff0);
+			glm::vec3 L = normalize(sample - P);
+			float dist = glm::length(sample - P);
+			const float attenuation = light.intensity / (AREA_LIGHT_SAMPLES * AREA_LIGHT_SAMPLES * (4 * M_PIf * dist * dist + 1.0f));
+			float diffuse = 0.0f, specular = 0.0f, shadeFactor = 1.0f;
 
-				const float spec0 = std::pow(std::max(dot(glm::reflect(-L, triangle[0].normal), V), 0.0f), mat.shininess);
-				const float spec1 = std::pow(std::max(dot(glm::reflect(-L, triangle[1].normal), V), 0.0f), mat.shininess);
-				const float spec2 = std::pow(std::max(dot(glm::reflect(-L, triangle[2].normal), V), 0.0f), mat.shininess);
-				specular = (hit.u * spec1 + hit.v * spec2 + hit.w * spec0);
-				break;
+			switch (model.sMode) {
+				case FLAT: {
+					// shadow
+					glm::vec3 sL = normalize(sample - P);
+					float sDist = glm::length(sample - P);
+					Ray shadowRay(P + N * 0.001f, sL, sDist);
+					auto shadowHit = scene.closestIntersection(shadowRay, MIN_DIST, sDist - MIN_DIST);
+					if (shadowHit.modelIndex != -1) continue;
+				}
+				case PHONG: {
+					// diffuse/specular
+					diffuse = std::max(dot(N, L), 0.0f) * shadeFactor;
+					const glm::vec3 R = glm::reflect(-L, N);
+					specular = std::pow(std::max(dot(R, V), 0.0f), mat.shininess) * shadeFactor;
+					break;
+				}
+				default: {
+					const float diff0 = std::max(dot(triangle[0].normal, L), 0.0f) * shadeFactor;
+					const float diff1 = std::max(dot(triangle[1].normal, L), 0.0f) * shadeFactor;
+					const float diff2 = std::max(dot(triangle[2].normal, L), 0.0f) * shadeFactor;
+					diffuse = (hit.u * diff1 + hit.v * diff2 + hit.w * diff0);
+
+					const float spec0 = std::pow(std::max(dot(glm::reflect(-L, triangle[0].normal), V), 0.0f), mat.shininess) * shadeFactor;
+					const float spec1 = std::pow(std::max(dot(glm::reflect(-L, triangle[1].normal), V), 0.0f), mat.shininess) * shadeFactor;
+					const float spec2 = std::pow(std::max(dot(glm::reflect(-L, triangle[2].normal), V), 0.0f), mat.shininess) * shadeFactor;
+					specular = (hit.u * spec1 + hit.v * spec2 + hit.w * spec0);
+					break;
+				}
 			}
+
+			colour += (diffuse * baseColour + specular * mat.specular) * light.colour * attenuation;
 		}
-
-		colour += (diffuse * baseColour + specular * mat.specular) * light.colour * attenuation;
 	}
 
 	if (depth < MAX_DEPTH && mat.transparency > 0.0f) {
@@ -285,7 +306,7 @@ void Renderer::raytrace(const Scene &scene, const Camera &cam) {
 	static const int reportEvery = 5000;
 	std::atomic<int> progress{0};
 	std::atomic<int> nextReport{reportEvery};
-	#pragma omp parallel for collapse(2) shared(scene, cam, progress, nextReport) num_threads(6)
+	#pragma omp parallel for collapse(2) shared(scene, cam, progress, nextReport) num_threads(10)
 	for (int y = 0; y < static_cast<int>(window.height); y++) {
 		for (int x = 0; x < static_cast<int>(window.width); x++) {
 			Ray ray = cam.projectRay(x, y, static_cast<float>(window.height) / 2.0f);
