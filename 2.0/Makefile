@@ -78,4 +78,4 @@ $(BUILD_DIR)/%.o: $(EXTRA_DIR)%.cpp
 
 # Files to remove during clean
 clean:
-	rm $(BUILD_DIR)/*
+	rm -r $(BUILD_DIR)/*

@@ -13,6 +13,7 @@
 #include <iomanip>
 #include <omp.h>
 #include <atomic>
+#include <chrono>
 
 #define MAX_DEPTH 4
 

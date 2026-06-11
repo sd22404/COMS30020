@@ -53,35 +53,21 @@ add_executable(RedNoise
         src/RedNoise.cpp
 )
 
-if (MSVC)
-    target_compile_options(RedNoise
-            PUBLIC
-            /W3
-            /Zc:wchar_t
-            )
-    set(DEBUG_OPTIONS /MTd)
-    set(RELEASE_OPTIONS /MT /GF /Gy /O2 /fp:fast)
-    if (NOT DEFINED SDL2_LIBRARIES)
-        set(SDL2_LIBRARIES SDL2::SDL2 SDL2::SDL2main)
-    endif()
-else ()
-    target_compile_options(RedNoise
-        PUBLIC
-        -Wall
-        -Wextra
-        -Wcast-align
-        -Wfatal-errors
-        -Werror=return-type
-        -Wno-unused-parameter
-        -Wno-unused-variable
-        -Wno-ignored-attributes)
+target_compile_options(RedNoise
+    PUBLIC
+    -Wall
+    -Wextra
+    -Wcast-align
+    -Wfatal-errors
+    -Werror=return-type
+    -Wno-unused-parameter
+    -Wno-unused-variable
+    -Wno-ignored-attributes)
 
-    set(DEBUG_OPTIONS -Og -fno-omit-frame-pointer -g)
-    set(RELEASE_OPTIONS -O3 -march=native -mtune=native)
-    set(SPEEDY_OPTIONS -Ofast -funsafe-math-optimizations -march=native)
-    target_link_libraries(RedNoise PUBLIC $<$<CONFIG:Debug>:-Wl,-lasan>)
-
-endif()
+set(DEBUG_OPTIONS -Og -fno-omit-frame-pointer -g)
+set(RELEASE_OPTIONS -O3 -march=native -mtune=native)
+set(SPEEDY_OPTIONS -Ofast -funsafe-math-optimizations -march=native -mtune=native)
+target_link_libraries(RedNoise PUBLIC $<$<CONFIG:Debug>:-Wl,-lasan>)
 
 find_package(OpenMP)
 if(OpenMP_CXX_FOUND)

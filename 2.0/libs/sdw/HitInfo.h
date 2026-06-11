@@ -4,8 +4,8 @@
 #include <iostream>
 
 struct HitInfo {
-	glm::vec3 intersectionPoint;
-	float distanceFromCamera{};
+	glm::vec3 point{INFINITY};
+	float distance{INFINITY};
 	float u{}, v{}, w{};
 	int modelIndex{-1};
 	int triIndex{-1};

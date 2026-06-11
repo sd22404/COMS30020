@@ -167,7 +167,7 @@ glm::vec3 Renderer::traceRay(const Ray &ray, const Scene &scene, int depth) {
 	const Model &model = scene.models[hit.modelIndex];
 	const ModelTriangle &triangle = model.triangles[hit.triIndex];
 	const Material &mat = model.material;
-	const glm::vec3 P = hit.intersectionPoint;
+	const glm::vec3 P = hit.point;
 
 	// interpolate texture coordinates
 	const float texX = hit.u * triangle[1].texturePoint.x + hit.v * triangle[2].texturePoint.x + hit.w * triangle[0].texturePoint.x;
@@ -222,7 +222,7 @@ glm::vec3 Renderer::traceRay(const Ray &ray, const Scene &scene, int depth) {
 					glm::vec3 sL = normalize(sample - P);
 					float sDist = glm::length(sample - P);
 					Ray shadowRay(P + N * 0.001f, sL, sDist);
-					auto shadowHit = scene.closestIntersection(shadowRay, MIN_DIST, sDist - MIN_DIST);
+					auto shadowHit = scene.intersection(shadowRay, MIN_DIST, sDist - MIN_DIST);
 					if (shadowHit.modelIndex != -1) continue;
 				}
 				case PHONG: {
@@ -302,7 +302,8 @@ void Renderer::raster(const Scene &scene, const Camera &cam) {
 }
 
 void Renderer::raytrace(const Scene &scene, const Camera &cam) {
-	time_t start = time(nullptr);
+	// time_t start = time(nullptr);
+	auto start = std::chrono::high_resolution_clock::now();
 	static const int reportEvery = 5000;
 	std::atomic<int> progress{0};
 	std::atomic<int> nextReport{reportEvery};
@@ -325,6 +326,6 @@ void Renderer::raytrace(const Scene &scene, const Camera &cam) {
 			}
 		}
 	}
-	time_t end = time(nullptr);
-	std::cout << "\nFrametime: " << difftime(end, start) << " seconds." << std::endl;
+	auto end = std::chrono::high_resolution_clock::now();
+	std::cout << "\nFrametime: " << std::chrono::duration_cast<std::chrono::seconds>(end - start).count() << " seconds." << std::endl;
 }

@@ -54,8 +54,34 @@ glm::vec3 Scene::backgroundColour(const int x, const int y) const {
 	return glm::vec3(0.0f);
 }
 
+static HitInfo intersectTriangle(const Ray &ray, const ModelTriangle &triangle, float minDist, float maxDist) {
+	constexpr float epsilon = 1e-6f;
+	const glm::vec3 edge1 = triangle[1].position - triangle[0].position;
+	const glm::vec3 edge2 = triangle[2].position - triangle[0].position;
+
+	const glm::vec3 pVec = cross(ray.dir, edge2);
+	const float det = dot(edge1, pVec);
+	if (std::fabs(det) < epsilon) return HitInfo{};
+
+	const float invDet = 1.0f / det;
+	const glm::vec3 tVec = ray.start - triangle[0].position;
+	const float u = dot(tVec, pVec) * invDet;
+	if (u < 0.0f || u > 1.0f) return HitInfo{};
+
+	const glm::vec3 qVec = cross(tVec, edge1);
+	const float v = dot(ray.dir, qVec) * invDet;
+	if (v < 0.0f || u + v > 1.0f) return HitInfo{};
+
+	const float t = dot(edge2, qVec) * invDet;
+	if (t <= minDist || t >= maxDist) return HitInfo{};
+
+	HitInfo hit(ray.start + ray.dir * t, t, -1, -1);
+	hit.u = u; hit.v = v; hit.w = 1.0f - u - v;
+	return hit;
+}
+
 HitInfo Scene::closestIntersection(const Ray &ray, const float minDist, const float maxDist) const {
-	float inverseClosestDistance = 0;
+	float closestHit = INFINITY;
 	int modelIndex = -1;
 	HitInfo intersection;
 	for (auto &model : models) {
@@ -63,26 +89,36 @@ HitInfo Scene::closestIntersection(const Ray &ray, const float minDist, const fl
 		int triIndex = -1;
 		for (auto &triangle : model.triangles) {
 			triIndex++;
-			// calculate edge vectors
-			glm::vec3 e0 = triangle[1].position - triangle[0].position;
-			glm::vec3 e1 = triangle[2].position - triangle[0].position;
-			// calculate vector from startPoint to triangle
-			glm::vec3 SPVector = ray.start - triangle[0].position;
-			// generate direction/edge matrix
-			glm::mat3 DEMatrix(-ray.dir, e0, e1);
-			// find possible solution in [t, u, v]
-			const glm::vec3 possibleSolution = inverse(DEMatrix) * SPVector;
-			const float t = possibleSolution.x, u = possibleSolution.y, v = possibleSolution.z;
-			// if closer than previously found solution, and within the bounds of the triangle, set new closest intersection
-			if (t > minDist && t < maxDist && 1.0f / t > inverseClosestDistance && u >= 0 && u <= 1.0 && v >= 0 && v <= 1.0 && (u + v) <= 1.0) {
-				intersection = HitInfo(ray.start + t * ray.dir, t, modelIndex, triIndex);
-				intersection.u = u; intersection.v = v; intersection.w = 1.0f - u - v;
-				inverseClosestDistance = 1 / t;
+			const HitInfo hit = intersectTriangle(ray, triangle, minDist, maxDist);
+			if (hit.distance < closestHit) {
+				intersection = hit;
+				intersection.modelIndex = modelIndex;
+				intersection.triIndex = triIndex;
+				closestHit = hit.distance;
 			}
 		}
 	}
 
 	return intersection;
+}
+
+HitInfo Scene::intersection(const Ray &ray, const float minDist, const float maxDist) const {
+	int modelIndex = -1;
+	HitInfo intersection;
+	for (auto &model : models) {
+		modelIndex++;
+		int triIndex = -1;
+		for (auto &triangle : model.triangles) {
+			triIndex++;
+			const HitInfo hit = intersectTriangle(ray, triangle, minDist, maxDist);
+			if (hit.modelIndex != -1) {
+				intersection = hit;
+				intersection.modelIndex = modelIndex;
+				intersection.triIndex = triIndex;
+				return intersection;
+			}
+		}
+	}
 }
 
 
